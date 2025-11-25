@@ -76,15 +76,10 @@ def analyze_and_act():
     # RSI
     df['rsi'] = ta.rsi(df['close'], length=RSI_PERIOD)
     
-    # Bollinger Bands
-    bb = ta.bbands(df['close'], length=BB_PERIOD, std=BB_STD)
-    
-    bbl_col = f'BBL_{BB_PERIOD}_{float(BB_STD)}'
-    bbu_col = f'BBU_{BB_PERIOD}_{float(BB_STD)}'
-    
-    if bbl_col not in bb.columns:
-        print(f"Error: BB columns not found. Available: {bb.columns}")
-        return
+   # SOLUÇÃO BLINDADA: Pega pelo índice (0=Lower, 2=Upper)
+    # Assim não importa se o nome muda na biblioteca
+    bbl_col = bb.columns[0]
+    bbu_col = bb.columns[2]
 
     df = pd.concat([df, bb], axis=1)
 
@@ -150,3 +145,4 @@ def analyze_and_act():
 
 if __name__ == "__main__":
     analyze_and_act()
+
