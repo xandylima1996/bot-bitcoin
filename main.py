@@ -10,7 +10,7 @@ import requests
 from datetime import datetime
 
 # --- Configuration ---
-SYMBOL = 'BTC/USDT'
+SYMBOL = 'BTC/USD' # ALTERADO PARA USD (SÍMBOLO COMUM NA KRAKEN)
 TIMEFRAME = '15m'
 RSI_PERIOD = 14
 BB_PERIOD = 20
@@ -25,7 +25,7 @@ TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 def init_firebase():
     if not firebase_admin._apps:
         if not FIREBASE_CREDS_JSON:
-            raise ValueError("FIREBASE_CREDENTIALS environment variable not set.")
+            raise ValueError("FIREBASE_CREDS_JSON environment variable not set.")
         
         try:
             creds_dict = json.loads(FIREBASE_CREDS_JSON)
@@ -55,7 +55,8 @@ def send_telegram_message(message):
         print(f"Error sending Telegram message: {e}")
 
 def get_data():
-    exchange = ccxt.binance()
+    # ALTERADO: Usando Kraken para evitar bloqueio de IP de servidor dos EUA
+    exchange = ccxt.kraken()
     bars = exchange.fetch_ohlcv(SYMBOL, timeframe=TIMEFRAME, limit=100)
     df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -77,29 +78,17 @@ def analyze_and_act():
     
     # Bollinger Bands
     bb = ta.bbands(df['close'], length=BB_PERIOD, std=BB_STD)
-    # pandas_ta returns columns like BBL_20_2.0, BBM_20_2.0, BBU_20_2.0
-    # We need to rename or access them dynamically. 
-    # Default names: BBL_length_std, BBM_..., BBU_...
+    
     bbl_col = f'BBL_{BB_PERIOD}_{float(BB_STD)}'
     bbu_col = f'BBU_{BB_PERIOD}_{float(BB_STD)}'
     
-    # Check if columns exist (pandas_ta naming can vary slightly by version, usually it's reliable)
     if bbl_col not in bb.columns:
-        # Fallback or print columns to debug if needed, but standard naming is consistent
         print(f"Error: BB columns not found. Available: {bb.columns}")
         return
 
     df = pd.concat([df, bb], axis=1)
 
     # 3. Logic
-    # We look at the LAST completed candle or the current one?
-    # The prompt implies "check if there is a signal".
-    # Using the latest available data point (which might be the still-open candle or the last closed one depending on fetch_ohlcv).
-    # ccxt fetch_ohlcv usually returns the latest candle as the last element (often incomplete).
-    # However, for a bot running on schedule, we usually want to act on the *last closed* candle to be sure.
-    # BUT, the user's JS dashboard uses the *current* price.
-    # Let's use the last row of the dataframe.
-    
     last_row = df.iloc[-1]
     current_price = last_row['close']
     rsi = last_row['rsi']
@@ -110,7 +99,6 @@ def analyze_and_act():
 
     signal = None
     
-    # Logic from dashboard:
     # UP: RSI < 35 AND Price <= BB_Lower * 1.005
     # DOWN: RSI > 65 AND Price >= BB_Upper * 0.995
     
@@ -127,11 +115,6 @@ def analyze_and_act():
         try:
             db = init_firebase()
             collection = db.collection('historico_bitcoin')
-            
-            # Check if we recently added a signal to avoid spamming?
-            # The prompt says "Se houver sinal: Salve...". It doesn't explicitly ask for cooldown here,
-            # but it's good practice. However, I'll stick to the requirements: "Se houver sinal: Salve".
-            # The dashboard has a cooldown. The bot might run every 15m, so natural cooldown.
             
             doc_data = {
                 'timestamp': int(last_row['timestamp'].timestamp() * 1000), # ms
