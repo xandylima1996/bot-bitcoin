@@ -10,14 +10,13 @@ import requests
 from datetime import datetime
 
 # --- Configuration ---
-SYMBOL = 'BTC/USD' # ALTERADO PARA USD (SÍMBOLO COMUM NA KRAKEN)
+SYMBOL = 'BTC/USD' # KRAKEN usa USD
 TIMEFRAME = '15m'
 RSI_PERIOD = 14
 BB_PERIOD = 20
 BB_STD = 2
 
 # --- Environment Variables ---
-# Ensure these are set in your environment (e.g., GitHub Actions Secrets)
 FIREBASE_CREDS_JSON = os.environ.get('FIREBASE_CREDENTIALS')
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
@@ -25,7 +24,7 @@ TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 def init_firebase():
     if not firebase_admin._apps:
         if not FIREBASE_CREDS_JSON:
-            raise ValueError("FIREBASE_CREDS_JSON environment variable not set.")
+            raise ValueError("FIREBASE_CREDENTIALS environment variable not set.")
         
         try:
             creds_dict = json.loads(FIREBASE_CREDS_JSON)
@@ -55,7 +54,7 @@ def send_telegram_message(message):
         print(f"Error sending Telegram message: {e}")
 
 def get_data():
-    # ALTERADO: Usando Kraken para evitar bloqueio de IP de servidor dos EUA
+    # Usando Kraken para evitar bloqueio nos EUA (GitHub Actions)
     exchange = ccxt.kraken()
     bars = exchange.fetch_ohlcv(SYMBOL, timeframe=TIMEFRAME, limit=100)
     df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -76,8 +75,10 @@ def analyze_and_act():
     # RSI
     df['rsi'] = ta.rsi(df['close'], length=RSI_PERIOD)
     
-   # SOLUÇÃO BLINDADA: Pega pelo índice (0=Lower, 2=Upper)
-    # Assim não importa se o nome muda na biblioteca
+    # Bollinger Bands (A LINHA QUE FALTAVA ESTÁ AQUI ABAIXO)
+    bb = ta.bbands(df['close'], length=BB_PERIOD, std=BB_STD)
+    
+    # Solução Blindada: Pega pelo índice (0=Lower, 2=Upper)
     bbl_col = bb.columns[0]
     bbu_col = bb.columns[2]
 
@@ -120,7 +121,7 @@ def analyze_and_act():
                 'status': 'PENDING',
                 'resultPrice': None,
                 'outcome': None,
-                'source': 'bot' # Tag to identify it came from the python script
+                'source': 'bot'
             }
             
             collection.add(doc_data)
@@ -145,4 +146,3 @@ def analyze_and_act():
 
 if __name__ == "__main__":
     analyze_and_act()
-
