@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitcoin Bot Chart</title>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body { background-color: #0d1117; color: #c9d1d9; font-family: sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; }
+        h1 { margin: 0 0 10px 0; font-size: 1.5rem; }
+        .container { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+        #chart-container { flex: 2; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; position: relative; }
+        
+        #debug-log { 
+            font-family: monospace; font-size: 0.8rem; color: #8b949e; 
+            background: #161b22; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #30363d;
+        }
+        .success { color: #2ea043; }
+        .error { color: #da3633; }
+        .warning { color: #d29922; }
+    </style>
+</head>
+<body>
+    <h1>BTC/USD - Gráfico do Robô</h1>
+    <div id="debug-log">Iniciando sistema...</div>
+    <div class="container">
+        <div id="chart-container"></div>
+    </div>
+
+    <script>
+        // Log na tela para diagnóstico
+        function log(msg, type='') {
+            const el = document.getElementById('debug-log');
+            el.innerHTML = `<span class="${type}">[${new Date().toLocaleTimeString()}] ${msg}</span>`;
+        }
+
+        // --- 1. CONFIGURAÇÃO DO GRÁFICO ---
+        const chart = LightweightCharts.createChart(document.getElementById('chart-container'), { 
+            layout: { textColor: '#d1d4dc', background: { type: 'solid', color: '#0d1117' } },
+            grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
+            timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#30363d' },
+            rightPriceScale: { borderColor: '#30363d' },
+        });
+
+        const candleSeries = chart.addCandlestickSeries({ upColor: '#2ea043', downColor: '#da3633', borderVisible: false, wickUpColor: '#2ea043', wickDownColor: '#da3633' });
+        const bbUpper = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
+        const bbLower = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
+        const bbBasis = chart.addLineSeries({ color: 'rgba(210, 153, 34, 0.5)', lineWidth: 1, lineStyle: 2 });
+
+        // --- 2. MATEMÁTICA ---
+        function calculateBB(data, period = 20, stdDev = 2) {
+            let result = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) { result.push({ time: data[i].time }); continue; }
+                let slice = data.slice(i - period + 1, i + 1);
+                let sum = slice.reduce((a, b) => a + b.close, 0);
+                let mean = sum / period;
+                let squaredDiffs = slice.map(x => Math.pow(x.close - mean, 2));
+                let std = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / period);
+                result.push({ time: data[i].time, upper: mean + (std * stdDev), lower: mean - (std * stdDev), basis: mean });
+            }
+            return result;
+        }
+
+        // --- 3. DADOS (Estratégia Tripla) ---
+        async function tryCryptoCompare() {
+            const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=100');
+            const json = await res.json();
+            if (json.Response !== 'Success') throw new Error(json.Message);
+            return json.Data.Data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
+        }
+
+        async function tryCoinGecko() {
+            const res = await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/ohlc?vs_currency=usd&days=1');
+            const data = await res.json();
+            return data.map(d => ({ time: d[0]/1000, open: d[1], high: d[2], low: d[3], close: d[4] }));
+        }
+
+        function generateFakeData() {
+            log("Sem conexão API. Usando MODO SIMULAÇÃO.", "warning");
+            const res = [];
+            let price = 95000;
+            let time = Math.floor(Date.now() / 1000) - (100 * 60);
+            for (let i = 0; i < 100; i++) {
+                const close = price + (Math.random() - 0.5) * 200;
+                res.push({ time: time + (i * 60), open: price, high: Math.max(price, close)+50, low: Math.min(price, close)-50, close: close });
+                price = close;
+            }
+            return res;
+        }
+
+        async function start() {
+            let candles = [];
+            try {
+                log("Tentando CryptoCompare...");
+                candles = await tryCryptoCompare();
+                log("Conectado: CryptoCompare", "success");
+            } catch (e1) {
+                console.error(e1);
+                try {
+                    log("Tentando CoinGecko...", "warning");
+                    candles = await tryCoinGecko();
+                    log("Conectado: CoinGecko", "success");
+                } catch (e2) {
+                    console.error(e2);
+                    candles = generateFakeData();
+                }
+            }
+
+            if (candles.length > 0) {
+                candleSeries.setData(candles);
+                const bbData = calculateBB(candles);
+                const validBB = bbData.filter(d => d.upper);
+                bbUpper.setData(validBB.map(d => ({ time: d.time, value: d.upper })));
+                bbLower.setData(validBB.map(d => ({ time: d.time, value: d.lower })));
+                bbBasis.setData(validBB.map(d => ({ time: d.time, value: d.basis })));
+            }
+        }
+
+        start();
+
+        // Ajuste automático de tamanho
+        new ResizeObserver(entries => {
+            if (entries.length === 0) return;
+            const newRect = entries[0].contentRect;
+            chart.applyOptions({ height: newRect.height, width: newRect.width });
+        }).observe(document.getElementById('chart-container'));
+    </script>
+</body>
+</html>
