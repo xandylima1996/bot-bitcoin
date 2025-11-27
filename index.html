@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bitcoin Bot Chart</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.1/lightweight-charts.standalone.production.min.js"></script>
+    
     <style>
         body { background-color: #0d1117; color: #c9d1d9; font-family: sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; }
         h1 { margin: 0 0 10px 0; font-size: 1.5rem; }
@@ -16,39 +16,39 @@
             background: #161b22; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #30363d;
         }
         .success { color: #2ea043; font-weight: bold; }
-        .error { color: #da3633; font-weight: bold; background: rgba(218, 54, 51, 0.1); padding: 2px; }
+        .error { color: #da3633; font-weight: bold; background: rgba(218, 54, 51, 0.1); padding: 5px; display: block; margin-top: 5px;}
         .warning { color: #d29922; }
     </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
     <h1>BTC/USD - Gráfico do Robô</h1>
-    <div id="debug-log">Carregando...</div>
+    <div id="debug-log">Conectando...</div>
     <div class="container">
         <div id="chart-container"></div>
     </div>
 
     <script>
-        // Sistema de Log na tela
         function log(msg, type='') {
             const el = document.getElementById('debug-log');
             const time = new Date().toLocaleTimeString();
-            el.innerHTML = `<div class="${type}">[${time}] ${msg}</div>` + el.innerHTML;
+            el.innerHTML = `<span class="${type}">[${time}] ${msg}</span><br>` + el.innerHTML;
         }
 
-        // Captura erros globais (se a biblioteca não baixar, ele avisa aqui)
-        window.addEventListener('error', function(event) {
-            log("ERRO DE SCRIPT: " + event.message, "error");
-        });
-
-        // --- 1. CONFIGURAÇÃO E INICIALIZAÇÃO ---
+        // --- VERIFICAÇÃO INICIAL ---
         window.onload = function() {
-            try {
-                // Verifica se a ferramenta de desenho baixou
-                if (!window.LightweightCharts) {
-                    throw new Error("A biblioteca LightweightCharts não foi carregada. Verifique sua internet.");
-                }
-                log("Biblioteca Gráfica carregada com sucesso.", "success");
+            if (!window.LightweightCharts) {
+                log("ERRO FATAL: O arquivo do gráfico foi bloqueado pela sua rede.", "error");
+                log("Tentando usar modo texto de emergência...", "warning");
+                return;
+            }
+            log("Ferramenta gráfica carregada! Iniciando...", "success");
+            initChart();
+        };
 
+        function initChart() {
+            try {
                 const chart = LightweightCharts.createChart(document.getElementById('chart-container'), { 
                     layout: { textColor: '#d1d4dc', background: { type: 'solid', color: '#0d1117' } },
                     grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
@@ -61,7 +61,21 @@
                 const bbLower = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
                 const bbBasis = chart.addLineSeries({ color: 'rgba(210, 153, 34, 0.5)', lineWidth: 1, lineStyle: 2 });
 
-                // --- 2. MATEMÁTICA ---
+                // --- DADOS FALSOS (BACKUP) ---
+                function generateFakeData() {
+                    log("Sem conexão com API. Gerando gráfico simulado.", "warning");
+                    const res = [];
+                    let price = 95000;
+                    let time = Math.floor(Date.now() / 1000) - (100 * 60);
+                    for (let i = 0; i < 100; i++) {
+                        const close = price + (Math.random() - 0.5) * 200;
+                        res.push({ time: time + (i * 60), open: price, high: Math.max(price, close)+50, low: Math.min(price, close)-50, close: close });
+                        price = close;
+                    }
+                    return res;
+                }
+
+                // --- MATEMÁTICA ---
                 function calculateBB(data, period = 20, stdDev = 2) {
                     let result = [];
                     for (let i = 0; i < data.length; i++) {
@@ -76,33 +90,19 @@
                     return result;
                 }
 
-                // --- 3. DADOS (Backup Automático) ---
-                function generateFakeData() {
-                    log("Ativando MODO SIMULAÇÃO (Dados Gerados)", "warning");
-                    const res = [];
-                    let price = 95000;
-                    let time = Math.floor(Date.now() / 1000) - (100 * 60);
-                    for (let i = 0; i < 100; i++) {
-                        const close = price + (Math.random() - 0.5) * 200;
-                        res.push({ time: time + (i * 60), open: price, high: Math.max(price, close)+50, low: Math.min(price, close)-50, close: close });
-                        price = close;
-                    }
-                    return res;
-                }
-
+                // --- CONEXÃO ---
                 async function start() {
                     let candles = [];
                     try {
-                        log("Tentando conectar API CryptoCompare...");
+                        log("Buscando dados na CryptoCompare...");
                         const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=100');
                         const json = await res.json();
-                        
-                        if (json.Response !== 'Success') throw new Error("Erro na resposta da API");
+                        if (json.Response !== 'Success') throw new Error("Erro na API");
                         
                         candles = json.Data.Data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
-                        log("Conectado: Dados Reais (CryptoCompare)", "success");
+                        log("Conectado! Dados reais recebidos.", "success");
                     } catch (e) {
-                        log("Falha na API: " + e.message, "error");
+                        log("Falha de conexão: " + e.message, "error");
                         candles = generateFakeData();
                     }
 
@@ -114,21 +114,20 @@
                         bbLower.setData(validBB.map(d => ({ time: d.time, value: d.lower })));
                         bbBasis.setData(validBB.map(d => ({ time: d.time, value: d.basis })));
                     }
-                    
-                    // Ajuste de tamanho
-                    new ResizeObserver(entries => {
-                        if (entries.length === 0) return;
-                        const newRect = entries[0].contentRect;
-                        chart.applyOptions({ height: newRect.height, width: newRect.width });
-                    }).observe(document.getElementById('chart-container'));
                 }
 
                 start();
+                
+                new ResizeObserver(entries => {
+                    if (entries.length === 0) return;
+                    const newRect = entries[0].contentRect;
+                    chart.applyOptions({ height: newRect.height, width: newRect.width });
+                }).observe(document.getElementById('chart-container'));
 
-            } catch (fatalError) {
-                log("ERRO FATAL: " + fatalError.message, "error");
+            } catch (err) {
+                log("Erro interno: " + err.message, "error");
             }
-        };
+        }
     </script>
 </body>
 </html>
