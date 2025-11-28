@@ -82,26 +82,37 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-        // --- 🔴 COLE SUA CONFIGURAÇÃO DO FIREBASE AQUI EMBAIXO 🔴 ---
+        // =================================================================
+        // 🟢 CHAVES DO FIREBASE INSERIDAS 🟢
+        // =================================================================
         const firebaseConfig = {
-            // Exemplo: apiKey: "AIzaSy...",
-            // Cole o bloco inteiro que você pegou no site do Firebase
-            // SE VOCÊ NÃO COLAR, A TABELA NÃO VAI FUNCIONAR
+            apiKey: "AIzaSyAegLQL6VMHwDKeG0yvi5AjhlmcgNHCPN4",
+            authDomain: "bitcoin-tracker-4d96c.firebaseapp.com",
+            projectId: "bitcoin-tracker-4d96c",
+            storageBucket: "bitcoin-tracker-4d96c.firebasestorage.app",
+            messagingSenderId: "821670432068",
+            appId: "1:821670432068:web:92af69c44d92741c155b11",
+            measurementId: "G-WFZVQB3LRN"
         };
+        // =================================================================
 
         let db;
         try {
+            // Verifica se a pessoa colou a chave ou deixou vazio
+            if (!firebaseConfig.apiKey) {
+                throw new Error("Chaves ausentes");
+            }
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
-            document.getElementById('connection-status').innerText = "Firebase OK";
+            document.getElementById('connection-status').innerText = "Conectado ao Firebase";
             document.getElementById('connection-status').style.color = "#2ea043";
         } catch (e) {
             console.error(e);
-            document.getElementById('connection-status').innerText = "Erro Config Firebase";
+            document.getElementById('connection-status').innerText = "ERRO: Falha ao conectar no Firebase!";
             document.getElementById('connection-status').style.color = "#da3633";
         }
 
-        // --- GRÁFICO ---
+        // --- CONFIGURAÇÃO DO GRÁFICO ---
         const chart = LightweightCharts.createChart(document.getElementById('chart-container'), { 
             layout: { textColor: '#d1d4dc', background: { type: 'solid', color: '#0d1117' } },
             grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
@@ -109,8 +120,27 @@
             rightPriceScale: { borderColor: '#30363d' },
         });
 
-        const candleSeries = chart.addCandlestickSeries();
-        const markers = []; // Para guardar os pontos de compra/venda
+        const candleSeries = chart.addCandlestickSeries({ upColor: '#2ea043', downColor: '#da3633', borderVisible: false, wickUpColor: '#2ea043', wickDownColor: '#da3633' });
+        
+        // Linhas das Bandas de Bollinger
+        const bbUpper = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
+        const bbLower = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
+        const bbBasis = chart.addLineSeries({ color: 'rgba(210, 153, 34, 0.5)', lineWidth: 1, lineStyle: 2 });
+
+        // --- MATEMÁTICA DAS BANDAS ---
+        function calculateBB(data, period = 20, stdDev = 2) {
+            let result = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) { result.push({ time: data[i].time }); continue; }
+                let slice = data.slice(i - period + 1, i + 1);
+                let sum = slice.reduce((a, b) => a + b.close, 0);
+                let mean = sum / period;
+                let squaredDiffs = slice.map(x => Math.pow(x.close - mean, 2));
+                let std = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / period);
+                result.push({ time: data[i].time, upper: mean + (std * stdDev), lower: mean - (std * stdDev), basis: mean });
+            }
+            return result;
+        }
 
         // --- DADOS DO GRÁFICO (CryptoCompare) ---
         async function loadChartData() {
@@ -118,7 +148,17 @@
                 const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=200');
                 const json = await res.json();
                 const candles = json.Data.Data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
+                
+                // 1. Desenha as Velas
                 candleSeries.setData(candles);
+                
+                // 2. Calcula e Desenha as Linhas
+                const bbData = calculateBB(candles);
+                const validBB = bbData.filter(d => d.upper);
+                bbUpper.setData(validBB.map(d => ({ time: d.time, value: d.upper })));
+                bbLower.setData(validBB.map(d => ({ time: d.time, value: d.lower })));
+                bbBasis.setData(validBB.map(d => ({ time: d.time, value: d.basis })));
+
                 return candles;
             } catch (e) {
                 console.error("Erro gráfico", e);
@@ -140,7 +180,8 @@
 
             snapshot.forEach(doc => {
                 const data = doc.data();
-                if (data.action !== 'ENTRY' && data.action !== 'EXIT') return; // Filtra dados velhos
+                // Apenas exibe dados que têm 'action' definido (ignora logs antigos)
+                if (data.action !== 'ENTRY' && data.action !== 'EXIT') return; 
 
                 // 1. Preencher Tabela
                 const row = document.createElement('tr');
@@ -156,8 +197,8 @@
                 }
 
                 let resultado = '-';
-                if (data.outcome === 'WIN') { resultado = `<span class="badge bg-green">WIN</span>`; wins++; }
-                if (data.outcome === 'LOSS') { resultado = `<span class="badge bg-red">LOSS</span>`; losses++; }
+                if (data.outcome === 'WIN') { resultado = `<span class="badge bg-green">${data.profit_pct.toFixed(2)}% WIN</span>`; wins++; }
+                if (data.outcome === 'LOSS') { resultado = `<span class="badge bg-red">${data.profit_pct.toFixed(2)}% LOSS</span>`; losses++; }
                 if (data.outcome === 'WIN' || data.outcome === 'LOSS') total++;
 
                 row.innerHTML = `
@@ -171,7 +212,6 @@
                 tbody.appendChild(row);
 
                 // 2. Criar Pontos no Gráfico (Marcadores)
-                // Só marcamos as Entradas para não poluir
                 if (data.action === 'ENTRY') {
                     newMarkers.push({
                         time: data.timestamp / 1000,
@@ -183,7 +223,6 @@
                 }
             });
 
-            // Atualiza Marcadores no Gráfico
             candleSeries.setMarkers(newMarkers);
 
             // Atualiza Placar
@@ -196,18 +235,14 @@
             }
         }
 
-        // --- INICIALIZAÇÃO ---
         async function start() {
-            await loadChartData(); // Carrega velas
+            await loadChartData(); // Carrega velas e linhas
             await loadHistory();   // Carrega tabela e pontos
         }
 
         start();
-        
-        // Atualiza a cada 60s
         setInterval(start, 60000); 
 
-        // Responsividade
         new ResizeObserver(entries => {
             if (entries.length === 0) return;
             const newRect = entries[0].contentRect;
