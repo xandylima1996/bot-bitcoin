@@ -32,7 +32,7 @@
 <body>
     <header>
         <h1>🤖 BTC/USD - Dashboard</h1>
-        <div id="connection-status" style="color: yellow; font-size: 0.8rem;">Conectando...</div>
+        <div id="connection-status" style="color: yellow; font-size: 0.8rem;">Conectando ao Banco de Dados...</div>
     </header>
 
     <div id="stats-bar">
@@ -74,26 +74,28 @@
         import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         // =================================================================
-        // 🔴 COLE SUAS CHAVES DO FIREBASE AQUI NOVAMENTE! 🔴
+        // ✅ SUAS CHAVES JÁ ESTÃO AQUI AGORA ✅
         // =================================================================
         const firebaseConfig = {
-             apiKey: "AIzaSy...", // <--- Substitua pelo seu código real
-             // ... cole o resto aqui
+            apiKey: "AIzaSyAegLQL6VMHwDKeG0yvi5AjhlmcgNHCPN4",
+            authDomain: "bitcoin-tracker-4d96c.firebaseapp.com",
+            projectId: "bitcoin-tracker-4d96c",
+            storageBucket: "bitcoin-tracker-4d96c.firebasestorage.app",
+            messagingSenderId: "821670432068",
+            appId: "1:821670432068:web:92af69c44d92741c155b11",
+            measurementId: "G-WFZVQB3LRN"
         };
         // =================================================================
 
         let db;
         try {
-            if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("AIzaSy...")) {
-                throw new Error("Chaves ausentes");
-            }
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             document.getElementById('connection-status').innerText = "Conectado ao Firebase";
             document.getElementById('connection-status').style.color = "#2ea043";
         } catch (e) {
             console.error(e);
-            document.getElementById('connection-status').innerText = "ERRO: Cole as chaves no HTML!";
+            document.getElementById('connection-status').innerText = "ERRO DE CONEXÃO";
             document.getElementById('connection-status').style.color = "#da3633";
         }
 
@@ -102,7 +104,6 @@
             layout: { textColor: '#d1d4dc', background: { type: 'solid', color: '#0d1117' } },
             grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
             rightPriceScale: { borderColor: '#30363d' },
-            // Configuração de localidade para o Brasil
             localization: { 
                 locale: 'pt-BR', 
                 dateFormat: 'dd/MM/yyyy',
@@ -168,7 +169,6 @@
                 if (data.action !== 'ENTRY' && data.action !== 'EXIT') return; 
 
                 const row = document.createElement('tr');
-                // CORREÇÃO DE HORÁRIO AQUI:
                 const date = new Date(data.timestamp);
                 const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
                 const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
