@@ -11,17 +11,14 @@
         h1 { margin: 0; font-size: 1.2rem; }
         .container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         
-        /* GRÁFICO */
         #chart-container { flex: 2; min-height: 400px; position: relative; }
         
-        /* PLACAR */
         #stats-bar { display: flex; gap: 20px; padding: 10px 20px; background: #161b22; border-bottom: 1px solid #30363d; font-family: monospace; }
         .stat-box { display: flex; flex-direction: column; }
         .stat-label { font-size: 0.8rem; color: #8b949e; }
         .stat-val { font-size: 1.2rem; font-weight: bold; }
         .win { color: #2ea043; } .loss { color: #da3633; }
 
-        /* TABELA */
         #table-container { flex: 1; overflow-y: auto; background: #0d1117; padding: 10px; }
         table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
         th { text-align: left; color: #8b949e; padding: 8px; border-bottom: 1px solid #30363d; position: sticky; top: 0; background: #0d1117; }
@@ -30,8 +27,6 @@
         .bg-green { background: rgba(46, 160, 67, 0.2); color: #2ea043; }
         .bg-red { background: rgba(218, 54, 51, 0.2); color: #da3633; }
         .bg-gray { background: rgba(110, 118, 129, 0.2); color: #8b949e; }
-
-        #debug-log { position: absolute; top: 10px; left: 50px; font-family: monospace; font-size: 12px; z-index: 100; color: yellow; background: rgba(0,0,0,0.5); padding: 5px; display: none; }
     </style>
 </head>
 <body>
@@ -56,24 +51,20 @@
     </div>
 
     <div class="container">
-        <div id="chart-container">
-            <div id="debug-log">Log...</div>
-        </div>
-
+        <div id="chart-container"></div>
         <div id="table-container">
             <table>
                 <thead>
                     <tr>
-                        <th>Hora</th>
+                        <th>Data/Hora</th>
                         <th>Tipo</th>
                         <th>Entrada</th>
-                        <th>Alvo (Média)</th>
-                        <th>Stop Loss</th>
+                        <th>Alvo</th>
+                        <th>Stop</th>
                         <th>Resultado</th>
                     </tr>
                 </thead>
-                <tbody id="trade-table">
-                    </tbody>
+                <tbody id="trade-table"></tbody>
             </table>
         </div>
     </div>
@@ -83,23 +74,17 @@
         import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         // =================================================================
-        // 🟢 CHAVES DO FIREBASE INSERIDAS 🟢
+        // 🔴 COLE SUAS CHAVES DO FIREBASE AQUI NOVAMENTE! 🔴
         // =================================================================
         const firebaseConfig = {
-            apiKey: "AIzaSyAegLQL6VMHwDKeG0yvi5AjhlmcgNHCPN4",
-            authDomain: "bitcoin-tracker-4d96c.firebaseapp.com",
-            projectId: "bitcoin-tracker-4d96c",
-            storageBucket: "bitcoin-tracker-4d96c.firebasestorage.app",
-            messagingSenderId: "821670432068",
-            appId: "1:821670432068:web:92af69c44d92741c155b11",
-            measurementId: "G-WFZVQB3LRN"
+             apiKey: "AIzaSy...", // <--- Substitua pelo seu código real
+             // ... cole o resto aqui
         };
         // =================================================================
 
         let db;
         try {
-            // Verifica se a pessoa colou a chave ou deixou vazio
-            if (!firebaseConfig.apiKey) {
+            if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("AIzaSy...")) {
                 throw new Error("Chaves ausentes");
             }
             const app = initializeApp(firebaseConfig);
@@ -108,26 +93,32 @@
             document.getElementById('connection-status').style.color = "#2ea043";
         } catch (e) {
             console.error(e);
-            document.getElementById('connection-status').innerText = "ERRO: Falha ao conectar no Firebase!";
+            document.getElementById('connection-status').innerText = "ERRO: Cole as chaves no HTML!";
             document.getElementById('connection-status').style.color = "#da3633";
         }
 
-        // --- CONFIGURAÇÃO DO GRÁFICO ---
+        // --- CONFIGURAÇÃO DO GRÁFICO (COM FUSO HORÁRIO BR) ---
         const chart = LightweightCharts.createChart(document.getElementById('chart-container'), { 
             layout: { textColor: '#d1d4dc', background: { type: 'solid', color: '#0d1117' } },
             grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
-            timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#30363d' },
             rightPriceScale: { borderColor: '#30363d' },
+            // Configuração de localidade para o Brasil
+            localization: { 
+                locale: 'pt-BR', 
+                dateFormat: 'dd/MM/yyyy',
+            },
+            timeScale: {
+                timeVisible: true,
+                secondsVisible: false,
+                borderColor: '#30363d'
+            }
         });
 
         const candleSeries = chart.addCandlestickSeries({ upColor: '#2ea043', downColor: '#da3633', borderVisible: false, wickUpColor: '#2ea043', wickDownColor: '#da3633' });
-        
-        // Linhas das Bandas de Bollinger
         const bbUpper = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
         const bbLower = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
         const bbBasis = chart.addLineSeries({ color: 'rgba(210, 153, 34, 0.5)', lineWidth: 1, lineStyle: 2 });
 
-        // --- MATEMÁTICA DAS BANDAS ---
         function calculateBB(data, period = 20, stdDev = 2) {
             let result = [];
             for (let i = 0; i < data.length; i++) {
@@ -142,23 +133,18 @@
             return result;
         }
 
-        // --- DADOS DO GRÁFICO (CryptoCompare) ---
         async function loadChartData() {
             try {
                 const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=200');
                 const json = await res.json();
                 const candles = json.Data.Data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
                 
-                // 1. Desenha as Velas
                 candleSeries.setData(candles);
-                
-                // 2. Calcula e Desenha as Linhas
                 const bbData = calculateBB(candles);
                 const validBB = bbData.filter(d => d.upper);
                 bbUpper.setData(validBB.map(d => ({ time: d.time, value: d.upper })));
                 bbLower.setData(validBB.map(d => ({ time: d.time, value: d.lower })));
                 bbBasis.setData(validBB.map(d => ({ time: d.time, value: d.basis })));
-
                 return candles;
             } catch (e) {
                 console.error("Erro gráfico", e);
@@ -166,7 +152,6 @@
             }
         }
 
-        // --- DADOS DA TABELA E MARCADORES (Firebase) ---
         async function loadHistory() {
             if (!db) return;
             const q = query(collection(db, "historico_bitcoin"), orderBy("timestamp", "desc"), limit(50));
@@ -180,12 +165,13 @@
 
             snapshot.forEach(doc => {
                 const data = doc.data();
-                // Apenas exibe dados que têm 'action' definido (ignora logs antigos)
                 if (data.action !== 'ENTRY' && data.action !== 'EXIT') return; 
 
-                // 1. Preencher Tabela
                 const row = document.createElement('tr');
+                // CORREÇÃO DE HORÁRIO AQUI:
                 const date = new Date(data.timestamp);
+                const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
                 
                 let tipoBadge = `<span class="badge bg-gray">${data.action}</span>`;
                 if (data.action === 'ENTRY') {
@@ -197,12 +183,19 @@
                 }
 
                 let resultado = '-';
-                if (data.outcome === 'WIN') { resultado = `<span class="badge bg-green">${data.profit_pct.toFixed(2)}% WIN</span>`; wins++; }
-                if (data.outcome === 'LOSS') { resultado = `<span class="badge bg-red">${data.profit_pct.toFixed(2)}% LOSS</span>`; losses++; }
+                if (data.outcome === 'WIN') { resultado = `<span class="badge bg-green">WIN (${data.profit_pct?.toFixed(2)}%)</span>`; wins++; }
+                else if (data.outcome === 'LOSS') { resultado = `<span class="badge bg-red">LOSS (${data.profit_pct?.toFixed(2)}%)</span>`; losses++; }
+                
                 if (data.outcome === 'WIN' || data.outcome === 'LOSS') total++;
+                
+                if (total === 1) {
+                    const el = document.getElementById('stat-last');
+                    el.innerText = data.outcome || 'PENDING';
+                    el.className = 'stat-val ' + (data.outcome === 'WIN' ? 'win' : (data.outcome === 'LOSS' ? 'loss' : ''));
+                }
 
                 row.innerHTML = `
-                    <td>${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}</td>
+                    <td style="font-size: 0.8rem">${dateStr} <strong>${timeStr}</strong></td>
                     <td>${tipoBadge}</td>
                     <td>$${data.entryPrice?.toFixed(0) || '-'}</td>
                     <td>$${data.takeProfit?.toFixed(0) || '-'}</td>
@@ -211,7 +204,6 @@
                 `;
                 tbody.appendChild(row);
 
-                // 2. Criar Pontos no Gráfico (Marcadores)
                 if (data.action === 'ENTRY') {
                     newMarkers.push({
                         time: data.timestamp / 1000,
@@ -225,19 +217,20 @@
 
             candleSeries.setMarkers(newMarkers);
 
-            // Atualiza Placar
             document.getElementById('stat-total').innerText = total;
             if (total > 0) {
                 const winRate = (wins / total) * 100;
                 const el = document.getElementById('stat-winrate');
                 el.innerText = winRate.toFixed(0) + '%';
                 el.className = 'stat-val ' + (winRate >= 50 ? 'win' : 'loss');
+            } else {
+                 document.getElementById('stat-winrate').innerText = '--%';
             }
         }
 
         async function start() {
-            await loadChartData(); // Carrega velas e linhas
-            await loadHistory();   // Carrega tabela e pontos
+            await loadChartData();
+            await loadHistory();
         }
 
         start();
