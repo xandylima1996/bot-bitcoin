@@ -3,130 +3,217 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bitcoin Bot Chart</title>
-    
-    <style>
-        body { background-color: #0d1117; color: #c9d1d9; font-family: sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; }
-        h1 { margin: 0 0 10px 0; font-size: 1.5rem; }
-        .container { flex: 1; display: flex; flex-direction: column; gap: 20px; }
-        #chart-container { flex: 2; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; position: relative; }
-        
-        #debug-log { 
-            font-family: monospace; font-size: 0.8rem; color: #8b949e; 
-            background: #161b22; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #30363d;
-        }
-        .success { color: #2ea043; font-weight: bold; }
-        .error { color: #da3633; font-weight: bold; background: rgba(218, 54, 51, 0.1); padding: 5px; display: block; margin-top: 5px;}
-        .warning { color: #d29922; }
-    </style>
-
+    <title>Painel Bitcoin Bot</title>
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body { background-color: #0d1117; color: #c9d1d9; font-family: sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
+        header { padding: 15px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
+        h1 { margin: 0; font-size: 1.2rem; }
+        .container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* GRÁFICO */
+        #chart-container { flex: 2; min-height: 400px; position: relative; }
+        
+        /* PLACAR */
+        #stats-bar { display: flex; gap: 20px; padding: 10px 20px; background: #161b22; border-bottom: 1px solid #30363d; font-family: monospace; }
+        .stat-box { display: flex; flex-direction: column; }
+        .stat-label { font-size: 0.8rem; color: #8b949e; }
+        .stat-val { font-size: 1.2rem; font-weight: bold; }
+        .win { color: #2ea043; } .loss { color: #da3633; }
+
+        /* TABELA */
+        #table-container { flex: 1; overflow-y: auto; background: #0d1117; padding: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { text-align: left; color: #8b949e; padding: 8px; border-bottom: 1px solid #30363d; position: sticky; top: 0; background: #0d1117; }
+        td { padding: 8px; border-bottom: 1px solid #21262d; }
+        .badge { padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .bg-green { background: rgba(46, 160, 67, 0.2); color: #2ea043; }
+        .bg-red { background: rgba(218, 54, 51, 0.2); color: #da3633; }
+        .bg-gray { background: rgba(110, 118, 129, 0.2); color: #8b949e; }
+
+        #debug-log { position: absolute; top: 10px; left: 50px; font-family: monospace; font-size: 12px; z-index: 100; color: yellow; background: rgba(0,0,0,0.5); padding: 5px; display: none; }
+    </style>
 </head>
 <body>
-    <h1>BTC/USD - Gráfico do Robô</h1>
-    <div id="debug-log">Conectando...</div>
-    <div class="container">
-        <div id="chart-container"></div>
+    <header>
+        <h1>🤖 BTC/USD - Dashboard</h1>
+        <div id="connection-status" style="color: yellow; font-size: 0.8rem;">Conectando...</div>
+    </header>
+
+    <div id="stats-bar">
+        <div class="stat-box">
+            <span class="stat-label">Taxa de Acerto</span>
+            <span class="stat-val" id="stat-winrate">--%</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">Total Trades</span>
+            <span class="stat-val" id="stat-total">0</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">Último Sinal</span>
+            <span class="stat-val" id="stat-last">--</span>
+        </div>
     </div>
 
-    <script>
-        function log(msg, type='') {
-            const el = document.getElementById('debug-log');
-            const time = new Date().toLocaleTimeString();
-            el.innerHTML = `<span class="${type}">[${time}] ${msg}</span><br>` + el.innerHTML;
-        }
+    <div class="container">
+        <div id="chart-container">
+            <div id="debug-log">Log...</div>
+        </div>
 
-        // --- VERIFICAÇÃO INICIAL ---
-        window.onload = function() {
-            if (!window.LightweightCharts) {
-                log("ERRO FATAL: O arquivo do gráfico foi bloqueado pela sua rede.", "error");
-                return;
-            }
-            log("Ferramenta gráfica v3.8 carregada! Iniciando...", "success");
-            initChart();
+        <div id="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Tipo</th>
+                        <th>Entrada</th>
+                        <th>Alvo (Média)</th>
+                        <th>Stop Loss</th>
+                        <th>Resultado</th>
+                    </tr>
+                </thead>
+                <tbody id="trade-table">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+        // --- 🔴 COLE SUA CONFIGURAÇÃO DO FIREBASE AQUI EMBAIXO 🔴 ---
+        const firebaseConfig = {
+            // Exemplo: apiKey: "AIzaSy...",
+            // Cole o bloco inteiro que você pegou no site do Firebase
+            // SE VOCÊ NÃO COLAR, A TABELA NÃO VAI FUNCIONAR
         };
 
-        function initChart() {
+        let db;
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            document.getElementById('connection-status').innerText = "Firebase OK";
+            document.getElementById('connection-status').style.color = "#2ea043";
+        } catch (e) {
+            console.error(e);
+            document.getElementById('connection-status').innerText = "Erro Config Firebase";
+            document.getElementById('connection-status').style.color = "#da3633";
+        }
+
+        // --- GRÁFICO ---
+        const chart = LightweightCharts.createChart(document.getElementById('chart-container'), { 
+            layout: { textColor: '#d1d4dc', background: { type: 'solid', color: '#0d1117' } },
+            grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
+            timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#30363d' },
+            rightPriceScale: { borderColor: '#30363d' },
+        });
+
+        const candleSeries = chart.addCandlestickSeries();
+        const markers = []; // Para guardar os pontos de compra/venda
+
+        // --- DADOS DO GRÁFICO (CryptoCompare) ---
+        async function loadChartData() {
             try {
-                const chart = LightweightCharts.createChart(document.getElementById('chart-container'), { 
-                    layout: { textColor: '#d1d4dc', background: { type: 'solid', color: '#0d1117' } },
-                    grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
-                    timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#30363d' },
-                    rightPriceScale: { borderColor: '#30363d' },
-                });
-
-                const candleSeries = chart.addCandlestickSeries({ upColor: '#2ea043', downColor: '#da3633', borderVisible: false, wickUpColor: '#2ea043', wickDownColor: '#da3633' });
-                const bbUpper = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
-                const bbLower = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
-                const bbBasis = chart.addLineSeries({ color: 'rgba(210, 153, 34, 0.5)', lineWidth: 1, lineStyle: 2 });
-
-                // --- DADOS FALSOS (BACKUP) ---
-                function generateFakeData() {
-                    log("Sem conexão com API. Gerando gráfico simulado.", "warning");
-                    const res = [];
-                    let price = 95000;
-                    let time = Math.floor(Date.now() / 1000) - (100 * 60);
-                    for (let i = 0; i < 100; i++) {
-                        const close = price + (Math.random() - 0.5) * 200;
-                        res.push({ time: time + (i * 60), open: price, high: Math.max(price, close)+50, low: Math.min(price, close)-50, close: close });
-                        price = close;
-                    }
-                    return res;
-                }
-
-                // --- MATEMÁTICA ---
-                function calculateBB(data, period = 20, stdDev = 2) {
-                    let result = [];
-                    for (let i = 0; i < data.length; i++) {
-                        if (i < period - 1) { result.push({ time: data[i].time }); continue; }
-                        let slice = data.slice(i - period + 1, i + 1);
-                        let sum = slice.reduce((a, b) => a + b.close, 0);
-                        let mean = sum / period;
-                        let squaredDiffs = slice.map(x => Math.pow(x.close - mean, 2));
-                        let std = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / period);
-                        result.push({ time: data[i].time, upper: mean + (std * stdDev), lower: mean - (std * stdDev), basis: mean });
-                    }
-                    return result;
-                }
-
-                // --- CONEXÃO ---
-                async function start() {
-                    let candles = [];
-                    try {
-                        log("Buscando dados na CryptoCompare...");
-                        const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=100');
-                        const json = await res.json();
-                        if (json.Response !== 'Success') throw new Error("Erro na API");
-                        
-                        candles = json.Data.Data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
-                        log("Conectado! Dados reais recebidos.", "success");
-                    } catch (e) {
-                        log("Falha de conexão: " + e.message, "error");
-                        candles = generateFakeData();
-                    }
-
-                    if (candles.length > 0) {
-                        candleSeries.setData(candles);
-                        const bbData = calculateBB(candles);
-                        const validBB = bbData.filter(d => d.upper);
-                        bbUpper.setData(validBB.map(d => ({ time: d.time, value: d.upper })));
-                        bbLower.setData(validBB.map(d => ({ time: d.time, value: d.lower })));
-                        bbBasis.setData(validBB.map(d => ({ time: d.time, value: d.basis })));
-                    }
-                }
-
-                start();
-                
-                new ResizeObserver(entries => {
-                    if (entries.length === 0) return;
-                    const newRect = entries[0].contentRect;
-                    chart.applyOptions({ height: newRect.height, width: newRect.width });
-                }).observe(document.getElementById('chart-container'));
-
-            } catch (err) {
-                log("Erro interno: " + err.message, "error");
+                const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=200');
+                const json = await res.json();
+                const candles = json.Data.Data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
+                candleSeries.setData(candles);
+                return candles;
+            } catch (e) {
+                console.error("Erro gráfico", e);
+                return [];
             }
         }
+
+        // --- DADOS DA TABELA E MARCADORES (Firebase) ---
+        async function loadHistory() {
+            if (!db) return;
+            const q = query(collection(db, "historico_bitcoin"), orderBy("timestamp", "desc"), limit(50));
+            const snapshot = await getDocs(q);
+            
+            const tbody = document.getElementById('trade-table');
+            tbody.innerHTML = '';
+            
+            let wins = 0, losses = 0, total = 0;
+            const newMarkers = [];
+
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.action !== 'ENTRY' && data.action !== 'EXIT') return; // Filtra dados velhos
+
+                // 1. Preencher Tabela
+                const row = document.createElement('tr');
+                const date = new Date(data.timestamp);
+                
+                let tipoBadge = `<span class="badge bg-gray">${data.action}</span>`;
+                if (data.action === 'ENTRY') {
+                    tipoBadge = data.direction === 'UP' 
+                        ? `<span class="badge bg-green">COMPRA</span>` 
+                        : `<span class="badge bg-red">VENDA</span>`;
+                } else {
+                     tipoBadge = `<span class="badge bg-gray">SAÍDA</span>`;
+                }
+
+                let resultado = '-';
+                if (data.outcome === 'WIN') { resultado = `<span class="badge bg-green">WIN</span>`; wins++; }
+                if (data.outcome === 'LOSS') { resultado = `<span class="badge bg-red">LOSS</span>`; losses++; }
+                if (data.outcome === 'WIN' || data.outcome === 'LOSS') total++;
+
+                row.innerHTML = `
+                    <td>${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}</td>
+                    <td>${tipoBadge}</td>
+                    <td>$${data.entryPrice?.toFixed(0) || '-'}</td>
+                    <td>$${data.takeProfit?.toFixed(0) || '-'}</td>
+                    <td>$${data.stopLoss?.toFixed(0) || '-'}</td>
+                    <td>${resultado}</td>
+                `;
+                tbody.appendChild(row);
+
+                // 2. Criar Pontos no Gráfico (Marcadores)
+                // Só marcamos as Entradas para não poluir
+                if (data.action === 'ENTRY') {
+                    newMarkers.push({
+                        time: data.timestamp / 1000,
+                        position: data.direction === 'UP' ? 'belowBar' : 'aboveBar',
+                        color: data.direction === 'UP' ? '#2ea043' : '#da3633',
+                        shape: data.direction === 'UP' ? 'arrowUp' : 'arrowDown',
+                        text: data.direction === 'UP' ? 'BUY' : 'SELL'
+                    });
+                }
+            });
+
+            // Atualiza Marcadores no Gráfico
+            candleSeries.setMarkers(newMarkers);
+
+            // Atualiza Placar
+            document.getElementById('stat-total').innerText = total;
+            if (total > 0) {
+                const winRate = (wins / total) * 100;
+                const el = document.getElementById('stat-winrate');
+                el.innerText = winRate.toFixed(0) + '%';
+                el.className = 'stat-val ' + (winRate >= 50 ? 'win' : 'loss');
+            }
+        }
+
+        // --- INICIALIZAÇÃO ---
+        async function start() {
+            await loadChartData(); // Carrega velas
+            await loadHistory();   // Carrega tabela e pontos
+        }
+
+        start();
+        
+        // Atualiza a cada 60s
+        setInterval(start, 60000); 
+
+        // Responsividade
+        new ResizeObserver(entries => {
+            if (entries.length === 0) return;
+            const newRect = entries[0].contentRect;
+            chart.applyOptions({ height: newRect.height, width: newRect.width });
+        }).observe(document.getElementById('chart-container'));
+
     </script>
 </body>
 </html>
