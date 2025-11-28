@@ -18,7 +18,7 @@ BB_STD = 2
 
 # CONFIGURAÇÕES DE RISCO E LINK
 STOP_LOSS_PCT = 0.015  # 1.5% de Stop Loss
-SITE_URL = 'https://xandylima1996.github.io/bot-bitcoin/' # <--- SEU LINK NOVO AQUI
+SITE_URL = 'https://xandylima1996.github.io/bot-bitcoin/' # SEU LINK
 
 # --- Environment Variables ---
 FIREBASE_CREDS_JSON = os.environ.get('FIREBASE_CREDENTIALS')
@@ -42,7 +42,6 @@ def send_telegram_message(message):
         print("Telegram credentials not set.")
         return
 
-    # Adiciona o botão para abrir o seu site
     keyboard = {
         "inline_keyboard": [[
             {"text": "📊 Ver Gráfico e Tabela", "url": SITE_URL}
@@ -53,14 +52,16 @@ def send_telegram_message(message):
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
-        "parse_mode": "Markdown",
+        "parse_mode": "Markdown", # Markdown simples (suporta *bold*, mas odeia _)
         "reply_markup": json.dumps(keyboard)
     }
     try:
-        requests.post(url, data=payload)
-        print("Telegram message sent.")
+        response = requests.post(url, data=payload)
+        # Se der erro no envio (ex: formatação), mostramos no log
+        if response.status_code != 200:
+            print(f"Erro Telegram API: {response.text}")
     except Exception as e:
-        print(f"Error sending Telegram: {e}")
+        print(f"Erro sending Telegram: {e}")
 
 def get_data():
     exchange = ccxt.kraken()
@@ -90,7 +91,6 @@ def analyze_and_act():
     df['rsi'] = ta.rsi(df['close'], length=RSI_PERIOD)
     bb = ta.bbands(df['close'], length=BB_PERIOD, std=BB_STD)
     
-    # Pega colunas pelo indice para evitar erro de nome
     bbl_col = bb.columns[0] # Lower
     bbm_col = bb.columns[1] # Middle
     bbu_col = bb.columns[2] # Upper
@@ -114,7 +114,6 @@ def analyze_and_act():
     if last_order:
         last_action = last_order.get('action', 'EXIT')
         entry_price = last_order.get('entryPrice', 0)
-        # Fallback para dados antigos
         if 'action' not in last_order and 'direction' in last_order:
              last_action = 'ENTRY'
 
@@ -133,7 +132,7 @@ def analyze_and_act():
             new_action = 'ENTRY'
             reason = "RSI Baixo + Banda Inferior"
             stop_val = current_price * (1 - STOP_LOSS_PCT)
-            target_val = bb_middle # Alvo inicial é a média
+            target_val = bb_middle
             
         elif rsi > 65 and current_price >= bb_upper * 0.995:
             new_signal = 'DOWN'
@@ -145,21 +144,19 @@ def analyze_and_act():
     # --- LÓGICA DE SAÍDA (LUCRO + STOP LOSS) ---
     elif last_action == 'ENTRY':
         
-        # 1. STOP LOSS (Proteção)
+        # 1. STOP LOSS
         is_stop_loss = False
         if current_direction == 'UP':
-            if current_price <= entry_price * (1 - STOP_LOSS_PCT):
-                is_stop_loss = True
+            if current_price <= entry_price * (1 - STOP_LOSS_PCT): is_stop_loss = True
         elif current_direction == 'DOWN':
-            if current_price >= entry_price * (1 + STOP_LOSS_PCT):
-                is_stop_loss = True
+            if current_price >= entry_price * (1 + STOP_LOSS_PCT): is_stop_loss = True
                 
         if is_stop_loss:
             new_signal = 'STOP_LOSS'
             new_action = 'EXIT'
             reason = f"Preço atingiu limite de perda ({STOP_LOSS_PCT*100}%)"
 
-        # 2. TAKE PROFIT (Lucro na Média)
+        # 2. TAKE PROFIT
         elif current_direction == 'UP':
             if current_price >= bb_middle:
                 new_signal = 'TAKE_PROFIT'
@@ -176,7 +173,6 @@ def analyze_and_act():
         print(f"NOVO SINAL: {new_signal}")
         collection = db.collection('historico_bitcoin')
         
-        # Calcula resultado se for saida
         outcome = "PENDING"
         profit_pct = 0
         
@@ -204,9 +200,12 @@ def analyze_and_act():
         emoji = "🚀" if new_action == 'ENTRY' else ("💰" if outcome == 'WIN' else "🛑")
         titulo = "ENTRADA" if new_action == 'ENTRY' else ("LUCRO" if outcome == 'WIN' else "STOP LOSS")
         
+        # CORREÇÃO CRÍTICA: Remove o sublinhado (_) do nome do sinal para não quebrar o Telegram
+        sinal_limpo = new_signal.replace('_', ' ') 
+
         msg = (
             f"{emoji} *SINAL: {titulo}* {emoji}\n\n"
-            f"📢 *Tipo*: {new_signal}\n"
+            f"📢 *Tipo*: {sinal_limpo}\n"
             f"📝 *Motivo*: {reason}\n"
             f"💵 *Preço*: ${current_price:,.2f}\n"
         )
