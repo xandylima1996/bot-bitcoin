@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Bitcoin Bot</title>
-    <!-- Bibliotecas Gráficas e Markdown -->
+    <!-- Bibliotecas Gráficas -->
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
         
@@ -22,24 +21,21 @@
         }
         h1 { margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
         
-        /* BOTÕES */
-        .btn-group { display: flex; gap: 8px; }
-        
-        .btn {
+        /* BOTÃO CALCULADORA */
+        .btn-calc {
+            background: #238636;
+            color: white;
             padding: 6px 12px;
             border-radius: 6px;
             text-decoration: none;
             font-size: 0.85rem;
             font-weight: bold;
             border: 1px solid rgba(240,246,252,0.1);
-            cursor: pointer;
             display: flex;
             align-items: center;
             gap: 5px;
         }
-        .btn-calc { background: #238636; color: white; }
-        .btn-ai { background: #8e44ad; color: white; border: 1px solid #9b59b6; }
-        .btn-ai:hover { background: #9b59b6; }
+        .btn-calc:hover { background: #2ea043; }
 
         /* LAYOUT */
         .container { flex: 1; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
@@ -51,22 +47,6 @@
             border-bottom: 1px solid #30363d;
         }
         
-        /* PAINEL AI */
-        #ai-panel {
-            display: none;
-            background: #161b22;
-            border-bottom: 1px solid #30363d;
-            padding: 15px;
-            font-size: 0.9rem;
-            line-height: 1.5;
-        }
-        #ai-content { margin-top: 10px; color: #e6edf3; }
-        #ai-key-input {
-            background: #0d1117; border: 1px solid #30363d; color: white; padding: 5px; border-radius: 4px; width: 200px;
-        }
-        .ai-loading { color: #8e44ad; font-style: italic; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-
         /* PLACAR */
         #stats-bar { display: flex; gap: 15px; padding: 10px 15px; background: #0d1117; border-bottom: 1px solid #30363d; font-family: monospace; overflow-x: auto; }
         .stat-box { display: flex; flex-direction: column; min-width: 80px; }
@@ -88,21 +68,8 @@
 <body>
     <header>
         <h1>🤖 BTC Bot</h1>
-        <div class="btn-group">
-            <button onclick="toggleAI()" class="btn btn-ai">✨ Análise AI</button>
-            <a href="calculadora.html" class="btn btn-calc">🧮 Calc</a>
-        </div>
+        <a href="calculadora.html" class="btn-calc">🧮 Calc</a>
     </header>
-
-    <!-- PAINEL DA GEMINI AI -->
-    <div id="ai-panel">
-        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
-            <input type="password" id="ai-key-input" placeholder="Cole sua Gemini API Key aqui">
-            <button onclick="runAnalysis()" class="btn" style="background: #238636; color: white;">Gerar Análise</button>
-            <button onclick="toggleAI()" class="btn" style="background: transparent; border: 1px solid #da3633; color: #da3633;">X</button>
-        </div>
-        <div id="ai-content">Insira a sua chave API e clique em gerar para ver a análise do mercado.</div>
-    </div>
 
     <div class="container">
         <!-- PLACAR -->
@@ -144,22 +111,23 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-        import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
 
         // =================================================================
-        // 🔴 COLE SUAS CHAVES DO FIREBASE AQUI 🔴
+        // ✅ CHAVES INSERIDAS AUTOMATICAMENTE ✅
         // =================================================================
         const firebaseConfig = {
-            apiKey: "AIzaSy...", 
-            // ... cole o resto aqui (Use as mesmas que já funcionavam)
+            apiKey: "AIzaSyAegLQL6VMHwDKeG0yvi5AjhlmcgNHCPN4",
+            authDomain: "bitcoin-tracker-4d96c.firebaseapp.com",
+            projectId: "bitcoin-tracker-4d96c",
+            storageBucket: "bitcoin-tracker-4d96c.firebasestorage.app",
+            messagingSenderId: "821670432068",
+            appId: "1:821670432068:web:92af69c44d92741c155b11",
+            measurementId: "G-WFZVQB3LRN"
         };
         // =================================================================
 
         let db;
         try {
-            if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("AIzaSy...")) {
-                throw new Error("Chaves ausentes");
-            }
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             document.getElementById('connection-status').innerText = "• Online";
@@ -168,64 +136,6 @@
             console.error(e);
             document.getElementById('connection-status').innerText = "• Offline";
             document.getElementById('connection-status').style.color = "#da3633";
-        }
-
-        // --- VARIÁVEIS GLOBAIS PARA DADOS ---
-        let globalCandles = [];
-
-        // --- FUNÇÕES DA IA GEMINI ---
-        window.toggleAI = function() {
-            const panel = document.getElementById('ai-panel');
-            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-            
-            // Carregar chave salva
-            const savedKey = localStorage.getItem('gemini_key');
-            if (savedKey) document.getElementById('ai-key-input').value = savedKey;
-        }
-
-        window.runAnalysis = async function() {
-            const apiKey = document.getElementById('ai-key-input').value;
-            if (!apiKey) { alert("Por favor, insira a Gemini API Key."); return; }
-            
-            // Salvar chave para o futuro
-            localStorage.setItem('gemini_key', apiKey);
-
-            const contentDiv = document.getElementById('ai-content');
-            contentDiv.innerHTML = '<span class="ai-loading">🧠 A consultar o oráculo Gemini...</span>';
-
-            try {
-                // Preparar dados para a IA (Últimas 30 velas)
-                const recentData = globalCandles.slice(-30);
-                const lastClose = recentData[recentData.length - 1]?.close || 0;
-                
-                const prompt = `
-                    Atue como um especialista em Trading de Criptomoedas.
-                    Analise os dados recentes do Bitcoin (Timeframe 15m).
-                    Preço Atual: $${lastClose}.
-                    
-                    Aqui estão os últimos preços de fecho (do mais antigo para o mais recente):
-                    ${recentData.map(c => c.close.toFixed(2)).join(', ')}
-                    
-                    Dê-me um resumo curto (máximo 3 parágrafos) em Português:
-                    1. Qual a tendência imediata?
-                    2. Pontos de suporte/resistência observáveis nestes dados?
-                    3. Veredito: Bullish, Bearish ou Neutro?
-                    Use emojis.
-                `;
-
-                const genAI = new GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-09-2025" });
-                
-                const result = await model.generateContent(prompt);
-                const response = await result.response;
-                const text = response.text();
-                
-                // Renderizar Markdown
-                contentDiv.innerHTML = marked.parse(text);
-
-            } catch (error) {
-                contentDiv.innerHTML = `<span style="color: #da3633">Erro: ${error.message}</span>`;
-            }
         }
 
         // --- CONFIGURAÇÃO DO GRÁFICO (MODO MOBILE FRIENDLY) ---
@@ -263,9 +173,6 @@
                 const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=200');
                 const json = await res.json();
                 const candles = json.Data.Data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
-                
-                globalCandles = candles; // Guardar para a IA usar
-
                 candleSeries.setData(candles);
                 const bbData = calculateBB(candles);
                 const validBB = bbData.filter(d => d.upper);
@@ -290,6 +197,7 @@
 
                 const row = document.createElement('tr');
                 const date = new Date(data.timestamp);
+                // HORA BRASIL CORRIGIDA
                 const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
                 
                 let tipoBadge = `<span class="badge bg-gray">${data.action}</span>`;
