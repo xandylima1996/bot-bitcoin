@@ -1,346 +1,86 @@
 <!DOCTYPE html>
-<html lang="pt-PT">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel Bitcoin Bot</title>
-    <!-- Bibliotecas Gráficas e Markdown -->
-    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <title>Calculadora Bitcoin</title>
     <style>
-        body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
+        body { background-color: #0d1117; color: #c9d1d9; font-family: sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 400px; margin: 0 auto; background: #161b22; padding: 20px; border-radius: 12px; border: 1px solid #30363d; }
+        h2 { margin-top: 0; text-align: center; color: #58a6ff; }
+        label { display: block; margin: 10px 0 5px; color: #8b949e; font-size: 0.9rem; }
+        input { width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
         
-        /* HEADER */
-        header { 
-            padding: 15px; 
-            background: #161b22; 
-            border-bottom: 1px solid #30363d; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            gap: 10px;
-        }
-        h1 { margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
-        
-        /* BOTÕES */
-        .btn-group { display: flex; gap: 8px; }
-        
-        .btn {
-            padding: 6px 12px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-size: 0.85rem;
-            font-weight: bold;
-            border: 1px solid rgba(240,246,252,0.1);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .btn-calc { background: #238636; color: white; }
-        .btn-ai { background: #8e44ad; color: white; border: 1px solid #9b59b6; }
-        .btn-ai:hover { background: #9b59b6; }
+        .dir-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        .btn-dir { flex: 1; padding: 10px; background: #21262d; border: 1px solid #30363d; color: #8b949e; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .btn-dir.active.up { background: rgba(46, 160, 67, 0.2); color: #2ea043; border-color: #2ea043; }
+        .btn-dir.active.down { background: rgba(218, 54, 51, 0.2); color: #da3633; border-color: #da3633; }
 
-        /* LAYOUT */
-        .container { flex: 1; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
-        
-        #chart-container { 
-            height: 400px; 
-            width: 100%;
-            position: relative; 
-            border-bottom: 1px solid #30363d;
-        }
-        
-        /* PAINEL AI */
-        #ai-panel {
-            display: none;
-            background: #161b22;
-            border-bottom: 1px solid #30363d;
-            padding: 15px;
-            font-size: 0.9rem;
-            line-height: 1.5;
-        }
-        #ai-content { margin-top: 10px; color: #e6edf3; }
-        #ai-key-input {
-            background: #0d1117; border: 1px solid #30363d; color: white; padding: 5px; border-radius: 4px; width: 200px;
-        }
-        .ai-loading { color: #8e44ad; font-style: italic; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-
-        /* PLACAR */
-        #stats-bar { display: flex; gap: 15px; padding: 10px 15px; background: #0d1117; border-bottom: 1px solid #30363d; font-family: monospace; overflow-x: auto; }
-        .stat-box { display: flex; flex-direction: column; min-width: 80px; }
-        .stat-label { font-size: 0.75rem; color: #8b949e; }
-        .stat-val { font-size: 1.1rem; font-weight: bold; }
+        .result-box { margin-top: 20px; padding: 15px; background: #0d1117; border-radius: 8px; text-align: center; border: 1px solid #30363d; }
+        .res-val { font-size: 1.5rem; font-weight: bold; margin: 5px 0; }
         .win { color: #2ea043; } .loss { color: #da3633; }
-
-        /* TABELA */
-        #table-wrapper { padding: 10px; padding-bottom: 50px; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        th { text-align: left; color: #8b949e; padding: 8px; border-bottom: 1px solid #30363d; }
-        td { padding: 8px; border-bottom: 1px solid #21262d; }
-        .badge { padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
-        .bg-green { background: rgba(46, 160, 67, 0.2); color: #2ea043; }
-        .bg-red { background: rgba(218, 54, 51, 0.2); color: #da3633; }
-        .bg-gray { background: rgba(110, 118, 129, 0.2); color: #8b949e; }
+        
+        .btn-back { display: block; width: 100%; text-align: center; margin-top: 20px; color: #58a6ff; text-decoration: none; }
     </style>
 </head>
 <body>
-    <header>
-        <h1>🤖 BTC Bot</h1>
-        <div class="btn-group">
-            <button onclick="toggleAI()" class="btn btn-ai">✨ Análise AI</button>
-            <a href="calculadora.html" class="btn btn-calc">🧮 Calc</a>
-        </div>
-    </header>
-
-    <!-- PAINEL DA GEMINI AI -->
-    <div id="ai-panel">
-        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
-            <input type="password" id="ai-key-input" placeholder="Cole sua Gemini API Key aqui">
-            <button onclick="runAnalysis()" class="btn" style="background: #238636; color: white;">Gerar Análise</button>
-            <button onclick="toggleAI()" class="btn" style="background: transparent; border: 1px solid #da3633; color: #da3633;">X</button>
-        </div>
-        <div id="ai-content">Insira a sua chave API e clique em gerar para ver a análise do mercado.</div>
-    </div>
-
     <div class="container">
-        <!-- PLACAR -->
-        <div id="stats-bar">
-            <div class="stat-box">
-                <span class="stat-label">Taxa Acerto</span>
-                <span class="stat-val" id="stat-winrate">--%</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">Trades</span>
-                <span class="stat-val" id="stat-total">0</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">Último</span>
-                <span class="stat-val" id="stat-last">--</span>
-            </div>
-            <div id="connection-status" style="font-size: 0.7rem; color: #8b949e; align-self: center;">Conectando...</div>
+        <h2>🧮 Calculadora</h2>
+        
+        <div class="dir-row">
+            <button class="btn-dir active up" onclick="setDir('UP')">COMPRA</button>
+            <button class="btn-dir down" onclick="setDir('DOWN')">VENDA</button>
         </div>
 
-        <!-- GRÁFICO -->
-        <div id="chart-container"></div>
+        <label>Investimento ($)</label>
+        <input type="number" id="invest" value="100" oninput="calc()">
 
-        <!-- TABELA -->
-        <div id="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Hora (BR)</th>
-                        <th>Tipo</th>
-                        <th>Entrada</th>
-                        <th>Resultado</th>
-                    </tr>
-                </thead>
-                <tbody id="trade-table"></tbody>
-            </table>
+        <label>Alavancagem (x)</label>
+        <input type="number" id="lev" value="1" oninput="calc()">
+
+        <label>Entrada ($)</label>
+        <input type="number" id="entry" value="90000" oninput="calc()">
+
+        <label>Saída ($)</label>
+        <input type="number" id="exit" value="91000" oninput="calc()">
+
+        <div class="result-box">
+            <div>Resultado Estimado:</div>
+            <div id="res-usd" class="res-val">$0.00</div>
+            <div id="res-pct" style="font-size: 0.9rem;">0.00%</div>
         </div>
+
+        <a href="index.html" class="btn-back">← Voltar para o Painel</a>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-        import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-        import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
-
-        // =================================================================
-        // 🔴 COLE SUAS CHAVES DO FIREBASE AQUI 🔴
-        // =================================================================
-        const firebaseConfig = {
-            apiKey: "AIzaSy...", 
-            // ... cole o resto aqui (Use as mesmas que já funcionavam)
-        };
-        // =================================================================
-
-        let db;
-        try {
-            if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("AIzaSy...")) {
-                throw new Error("Chaves ausentes");
-            }
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            document.getElementById('connection-status').innerText = "• Online";
-            document.getElementById('connection-status').style.color = "#2ea043";
-        } catch (e) {
-            console.error(e);
-            document.getElementById('connection-status').innerText = "• Offline";
-            document.getElementById('connection-status').style.color = "#da3633";
+    <script>
+        let dir = 'UP';
+        function setDir(d) {
+            dir = d;
+            document.querySelector('.up').className = 'btn-dir up' + (d === 'UP' ? ' active' : '');
+            document.querySelector('.down').className = 'btn-dir down' + (d === 'DOWN' ? ' active' : '');
+            calc();
         }
+        function calc() {
+            const invest = parseFloat(document.getElementById('invest').value) || 0;
+            const lev = parseFloat(document.getElementById('lev').value) || 1;
+            const entry = parseFloat(document.getElementById('entry').value) || 1;
+            const exit = parseFloat(document.getElementById('exit').value) || 1;
 
-        // --- VARIÁVEIS GLOBAIS PARA DADOS ---
-        let globalCandles = [];
+            let pct = dir === 'UP' ? ((exit - entry)/entry) : ((entry - exit)/entry);
+            pct = pct * 100 * lev;
+            const total = invest * (pct / 100);
 
-        // --- FUNÇÕES DA IA GEMINI ---
-        window.toggleAI = function() {
-            const panel = document.getElementById('ai-panel');
-            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+            const elUsd = document.getElementById('res-usd');
+            const elPct = document.getElementById('res-pct');
             
-            // Carregar chave salva
-            const savedKey = localStorage.getItem('gemini_key');
-            if (savedKey) document.getElementById('ai-key-input').value = savedKey;
-        }
-
-        window.runAnalysis = async function() {
-            const apiKey = document.getElementById('ai-key-input').value;
-            if (!apiKey) { alert("Por favor, insira a Gemini API Key."); return; }
+            elUsd.innerText = (total >= 0 ? '+' : '') + '$' + total.toFixed(2);
+            elPct.innerText = pct.toFixed(2) + '%';
             
-            // Salvar chave para o futuro
-            localStorage.setItem('gemini_key', apiKey);
-
-            const contentDiv = document.getElementById('ai-content');
-            contentDiv.innerHTML = '<span class="ai-loading">🧠 A consultar o oráculo Gemini...</span>';
-
-            try {
-                // Preparar dados para a IA (Últimas 30 velas)
-                const recentData = globalCandles.slice(-30);
-                const lastClose = recentData[recentData.length - 1]?.close || 0;
-                
-                const prompt = `
-                    Atue como um especialista em Trading de Criptomoedas.
-                    Analise os dados recentes do Bitcoin (Timeframe 15m).
-                    Preço Atual: $${lastClose}.
-                    
-                    Aqui estão os últimos preços de fecho (do mais antigo para o mais recente):
-                    ${recentData.map(c => c.close.toFixed(2)).join(', ')}
-                    
-                    Dê-me um resumo curto (máximo 3 parágrafos) em Português:
-                    1. Qual a tendência imediata?
-                    2. Pontos de suporte/resistência observáveis nestes dados?
-                    3. Veredito: Bullish, Bearish ou Neutro?
-                    Use emojis.
-                `;
-
-                const genAI = new GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-09-2025" });
-                
-                const result = await model.generateContent(prompt);
-                const response = await result.response;
-                const text = response.text();
-                
-                // Renderizar Markdown
-                contentDiv.innerHTML = marked.parse(text);
-
-            } catch (error) {
-                contentDiv.innerHTML = `<span style="color: #da3633">Erro: ${error.message}</span>`;
-            }
+            elUsd.className = 'res-val ' + (total >= 0 ? 'win' : 'loss');
+            elPct.className = total >= 0 ? 'win' : 'loss';
         }
-
-        // --- CONFIGURAÇÃO DO GRÁFICO (MODO MOBILE FRIENDLY) ---
-        const chart = LightweightCharts.createChart(document.getElementById('chart-container'), { 
-            layout: { textColor: '#d1d4dc', background: { type: 'solid', color: '#0d1117' } },
-            grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
-            rightPriceScale: { borderColor: '#30363d' },
-            localization: { locale: 'pt-BR', dateFormat: 'dd/MM/yyyy' },
-            timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#30363d' },
-            handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: false }, 
-            handleScroll: { mouseWheel: false, pressedMouseMove: false, vertTouchDrag: false, horzTouchDrag: false } 
-        });
-
-        const candleSeries = chart.addCandlestickSeries({ upColor: '#2ea043', downColor: '#da3633', borderVisible: false, wickUpColor: '#2ea043', wickDownColor: '#da3633' });
-        const bbUpper = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
-        const bbLower = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
-        const bbBasis = chart.addLineSeries({ color: 'rgba(210, 153, 34, 0.5)', lineWidth: 1, lineStyle: 2 });
-
-        function calculateBB(data, period = 20, stdDev = 2) {
-            let result = [];
-            for (let i = 0; i < data.length; i++) {
-                if (i < period - 1) { result.push({ time: data[i].time }); continue; }
-                let slice = data.slice(i - period + 1, i + 1);
-                let sum = slice.reduce((a, b) => a + b.close, 0);
-                let mean = sum / period;
-                let squaredDiffs = slice.map(x => Math.pow(x.close - mean, 2));
-                let std = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / period);
-                result.push({ time: data[i].time, upper: mean + (std * stdDev), lower: mean - (std * stdDev), basis: mean });
-            }
-            return result;
-        }
-
-        async function loadChartData() {
-            try {
-                const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=200');
-                const json = await res.json();
-                const candles = json.Data.Data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
-                
-                globalCandles = candles; // Guardar para a IA usar
-
-                candleSeries.setData(candles);
-                const bbData = calculateBB(candles);
-                const validBB = bbData.filter(d => d.upper);
-                bbUpper.setData(validBB.map(d => ({ time: d.time, value: d.upper })));
-                bbLower.setData(validBB.map(d => ({ time: d.time, value: d.lower })));
-                bbBasis.setData(validBB.map(d => ({ time: d.time, value: d.basis })));
-            } catch (e) { console.error("Erro gráfico", e); }
-        }
-
-        async function loadHistory() {
-            if (!db) return;
-            const q = query(collection(db, "historico_bitcoin"), orderBy("timestamp", "desc"), limit(50));
-            const snapshot = await getDocs(q);
-            const tbody = document.getElementById('trade-table');
-            tbody.innerHTML = '';
-            let wins = 0, total = 0;
-            const newMarkers = [];
-
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                if (data.action !== 'ENTRY' && data.action !== 'EXIT') return; 
-
-                const row = document.createElement('tr');
-                const date = new Date(data.timestamp);
-                const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                
-                let tipoBadge = `<span class="badge bg-gray">${data.action}</span>`;
-                if (data.action === 'ENTRY') {
-                    tipoBadge = data.direction === 'UP' ? `<span class="badge bg-green">COMPRA</span>` : `<span class="badge bg-red">VENDA</span>`;
-                } else { tipoBadge = `<span class="badge bg-gray">SAÍDA</span>`; }
-
-                let resultado = '-';
-                if (data.outcome === 'WIN') { resultado = `<span class="badge bg-green">+${data.profit_pct?.toFixed(2)}%</span>`; wins++; }
-                else if (data.outcome === 'LOSS') { resultado = `<span class="badge bg-red">${data.profit_pct?.toFixed(2)}%</span>`; }
-                
-                if (data.outcome === 'WIN' || data.outcome === 'LOSS') total++;
-                
-                if (total === 1) {
-                    const el = document.getElementById('stat-last');
-                    el.innerText = data.outcome || 'PENDING';
-                    el.className = 'stat-val ' + (data.outcome === 'WIN' ? 'win' : (data.outcome === 'LOSS' ? 'loss' : ''));
-                }
-
-                row.innerHTML = `
-                    <td style="font-weight:bold">${timeStr}</td>
-                    <td>${tipoBadge}</td>
-                    <td>$${data.entryPrice?.toFixed(0) || '-'}</td>
-                    <td>${resultado}</td>
-                `;
-                tbody.appendChild(row);
-
-                if (data.action === 'ENTRY') {
-                    newMarkers.push({
-                        time: data.timestamp / 1000,
-                        position: data.direction === 'UP' ? 'belowBar' : 'aboveBar',
-                        color: data.direction === 'UP' ? '#2ea043' : '#da3633',
-                        shape: data.direction === 'UP' ? 'arrowUp' : 'arrowDown',
-                        text: data.direction === 'UP' ? 'B' : 'S'
-                    });
-                }
-            });
-            candleSeries.setMarkers(newMarkers);
-            document.getElementById('stat-total').innerText = total;
-            if (total > 0) {
-                const winRate = (wins / total) * 100;
-                const el = document.getElementById('stat-winrate');
-                el.innerText = winRate.toFixed(0) + '%';
-                el.className = 'stat-val ' + (winRate >= 50 ? 'win' : 'loss');
-            } else { document.getElementById('stat-winrate').innerText = '--%'; }
-        }
-
-        async function start() { await loadChartData(); await loadHistory(); }
-        start();
-        setInterval(start, 60000); 
-        new ResizeObserver(entries => { if (entries.length === 0) return; const newRect = entries[0].contentRect; chart.applyOptions({ height: newRect.height, width: newRect.width }); }).observe(document.getElementById('chart-container'));
+        calc();
     </script>
 </body>
 </html>
