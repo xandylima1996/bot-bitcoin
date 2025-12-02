@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-PT">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -102,9 +102,9 @@
                         <th>Hora</th>
                         <th>Tipo</th>
                         <th>Entrada</th>
-                        <th>Alvo (Saída)</th> <!-- NOVA COLUNA -->
-                        <th>Stop Loss</th>    <!-- NOVA COLUNA -->
-                        <th>Validade</th>     <!-- COLUNA DE TEMPO -->
+                        <th>Alvo (Saída)</th>
+                        <th>Stop Loss</th>
+                        <th>Validade</th>
                         <th>Resultado</th>
                     </tr>
                 </thead>
@@ -215,7 +215,7 @@
                 
                 if (data.outcome === 'WIN' || data.outcome === 'LOSS') total++;
                 
-                // --- Lógica de Validade ---
+                // Validade
                 let validadeBadge = '-';
                 if (data.action === 'ENTRY') {
                     const diffMinutes = (now - data.timestamp) / (1000 * 60);
@@ -226,7 +226,7 @@
                     validadeBadge = `<span class="badge bg-gray">FECHADO</span>`;
                 }
 
-                // --- Lógica de Alvo e Stop ---
+                // Alvo e Stop
                 const alvoStr = (data.action === 'ENTRY' && data.takeProfit) ? `$${data.takeProfit.toFixed(0)}` : '-';
                 const stopStr = (data.action === 'ENTRY' && data.stopLoss) ? `$${data.stopLoss.toFixed(0)}` : '-';
 
