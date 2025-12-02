@@ -57,8 +57,8 @@
         /* TABELA */
         #table-wrapper { padding: 10px; padding-bottom: 50px; }
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        th { text-align: left; color: #8b949e; padding: 8px; border-bottom: 1px solid #30363d; white-space: nowrap; }
-        td { padding: 8px; border-bottom: 1px solid #21262d; vertical-align: middle; white-space: nowrap; }
+        th { text-align: left; color: #8b949e; padding: 8px; border-bottom: 1px solid #30363d; }
+        td { padding: 8px; border-bottom: 1px solid #21262d; vertical-align: middle; }
         
         .badge { padding: 3px 6px; border-radius: 4px; font-size: 0.70rem; font-weight: bold; display: inline-block; white-space: nowrap; }
         .bg-green { background: rgba(46, 160, 67, 0.2); color: #2ea043; }
@@ -102,9 +102,7 @@
                         <th>Hora</th>
                         <th>Tipo</th>
                         <th>Entrada</th>
-                        <th>Alvo (Saída)</th> <!-- NOVA COLUNA -->
-                        <th>Stop Loss</th>    <!-- NOVA COLUNA -->
-                        <th>Validade</th>
+                        <th>Validade</th> <!-- Coluna do Validador -->
                         <th>Resultado</th>
                     </tr>
                 </thead>
@@ -118,19 +116,20 @@
         import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         // =================================================================
-        // 🔴 COLE SUAS CHAVES DO FIREBASE AQUI 🔴
+        // ✅ CHAVES FIREBASE CONFIGURADAS ✅
         // =================================================================
         const firebaseConfig = {
-            apiKey: "AIzaSy...", 
-            // ... cole o resto aqui
+            apiKey: "AIzaSyAegLQL6VMHwDKeG0yvi5AjhlmcgNHCPN4",
+            authDomain: "bitcoin-tracker-4d96c.firebaseapp.com",
+            projectId: "bitcoin-tracker-4d96c",
+            storageBucket: "bitcoin-tracker-4d96c.firebasestorage.app",
+            messagingSenderId: "821670432068",
+            appId: "1:821670432068:web:92af69c44d92741c155b11",
+            measurementId: "G-WFZVQB3LRN"
         };
-        // =================================================================
 
         let db;
         try {
-            if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("AIzaSy...")) {
-                throw new Error("Chaves ausentes");
-            }
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             document.getElementById('connection-status').innerText = "• Online";
@@ -141,7 +140,7 @@
             document.getElementById('connection-status').style.color = "#da3633";
         }
 
-        // --- CONFIGURAÇÃO DO GRÁFICO ---
+        // --- CONFIGURAÇÃO DO GRÁFICO (MODO MOBILE FRIENDLY) ---
         const chart = LightweightCharts.createChart(document.getElementById('chart-container'), { 
             layout: { textColor: '#d1d4dc', background: { type: 'solid', color: '#0d1117' } },
             grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
@@ -193,6 +192,8 @@
             tbody.innerHTML = '';
             let wins = 0, total = 0;
             const newMarkers = [];
+            
+            // Hora atual para validade
             const now = Date.now();
 
             snapshot.forEach(doc => {
@@ -214,7 +215,7 @@
                 
                 if (data.outcome === 'WIN' || data.outcome === 'LOSS') total++;
                 
-                // --- Lógica de Validade ---
+                // Validade (O Validador)
                 let validadeBadge = '-';
                 if (data.action === 'ENTRY') {
                     const diffMinutes = (now - data.timestamp) / (1000 * 60);
@@ -224,11 +225,6 @@
                 } else {
                     validadeBadge = `<span class="badge bg-gray">FECHADO</span>`;
                 }
-
-                // --- Lógica de Alvo e Stop ---
-                // Mostra apenas se for Entrada e se o valor existir
-                const alvoStr = (data.action === 'ENTRY' && data.takeProfit) ? `$${data.takeProfit.toFixed(0)}` : '-';
-                const stopStr = (data.action === 'ENTRY' && data.stopLoss) ? `$${data.stopLoss.toFixed(0)}` : '-';
 
                 if (total === 1) {
                     const el = document.getElementById('stat-last');
@@ -240,8 +236,6 @@
                     <td style="font-weight:bold">${timeStr}</td>
                     <td>${tipoBadge}</td>
                     <td>$${data.entryPrice?.toFixed(0) || '-'}</td>
-                    <td style="color: #2ea043">${alvoStr}</td>
-                    <td style="color: #da3633">${stopStr}</td>
                     <td>${validadeBadge}</td>
                     <td>${resultado}</td>
                 `;
