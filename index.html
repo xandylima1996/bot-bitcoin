@@ -1,13 +1,10 @@
-Adicione minha chaves no html novo, vou te mandar o antigo 
-
-
 <!DOCTYPE html>
-<html lang="pt-PT">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Bitcoin Bot</title>
-    <!-- Bibliotecas Gráficas -->
+    <!-- Biblioteca Gráfica -->
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
@@ -61,11 +58,13 @@ Adicione minha chaves no html novo, vou te mandar o antigo
         #table-wrapper { padding: 10px; padding-bottom: 50px; }
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
         th { text-align: left; color: #8b949e; padding: 8px; border-bottom: 1px solid #30363d; }
-        td { padding: 8px; border-bottom: 1px solid #21262d; }
-        .badge { padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+        td { padding: 8px; border-bottom: 1px solid #21262d; vertical-align: middle; }
+        
+        .badge { padding: 3px 6px; border-radius: 4px; font-size: 0.70rem; font-weight: bold; display: inline-block; white-space: nowrap; }
         .bg-green { background: rgba(46, 160, 67, 0.2); color: #2ea043; }
         .bg-red { background: rgba(218, 54, 51, 0.2); color: #da3633; }
         .bg-gray { background: rgba(110, 118, 129, 0.2); color: #8b949e; }
+        .bg-yellow { background: rgba(210, 153, 34, 0.2); color: #d29922; }
     </style>
 </head>
 <body>
@@ -100,9 +99,10 @@ Adicione minha chaves no html novo, vou te mandar o antigo
             <table>
                 <thead>
                     <tr>
-                        <th>Hora (BR)</th>
+                        <th>Hora</th>
                         <th>Tipo</th>
                         <th>Entrada</th>
+                        <th>Validade</th> <!-- Coluna do Validador -->
                         <th>Resultado</th>
                     </tr>
                 </thead>
@@ -116,7 +116,7 @@ Adicione minha chaves no html novo, vou te mandar o antigo
         import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         // =================================================================
-        // ✅ CHAVES INSERIDAS AUTOMATICAMENTE ✅
+        // ✅ CHAVES FIREBASE CONFIGURADAS ✅
         // =================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyAegLQL6VMHwDKeG0yvi5AjhlmcgNHCPN4",
@@ -127,7 +127,6 @@ Adicione minha chaves no html novo, vou te mandar o antigo
             appId: "1:821670432068:web:92af69c44d92741c155b11",
             measurementId: "G-WFZVQB3LRN"
         };
-        // =================================================================
 
         let db;
         try {
@@ -193,6 +192,9 @@ Adicione minha chaves no html novo, vou te mandar o antigo
             tbody.innerHTML = '';
             let wins = 0, total = 0;
             const newMarkers = [];
+            
+            // Hora atual para validade
+            const now = Date.now();
 
             snapshot.forEach(doc => {
                 const data = doc.data();
@@ -200,7 +202,6 @@ Adicione minha chaves no html novo, vou te mandar o antigo
 
                 const row = document.createElement('tr');
                 const date = new Date(data.timestamp);
-                // HORA BRASIL CORRIGIDA
                 const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
                 
                 let tipoBadge = `<span class="badge bg-gray">${data.action}</span>`;
@@ -214,6 +215,17 @@ Adicione minha chaves no html novo, vou te mandar o antigo
                 
                 if (data.outcome === 'WIN' || data.outcome === 'LOSS') total++;
                 
+                // Validade (O Validador)
+                let validadeBadge = '-';
+                if (data.action === 'ENTRY') {
+                    const diffMinutes = (now - data.timestamp) / (1000 * 60);
+                    if (diffMinutes < 5) validadeBadge = `<span class="badge bg-green">⚡ IDEAL (${Math.floor(diffMinutes)}m)</span>`;
+                    else if (diffMinutes < 15) validadeBadge = `<span class="badge bg-yellow">⚠️ ATRASADO (${Math.floor(diffMinutes)}m)</span>`;
+                    else validadeBadge = `<span class="badge bg-gray">❌ EXPIRADO</span>`;
+                } else {
+                    validadeBadge = `<span class="badge bg-gray">FECHADO</span>`;
+                }
+
                 if (total === 1) {
                     const el = document.getElementById('stat-last');
                     el.innerText = data.outcome || 'PENDING';
@@ -224,6 +236,7 @@ Adicione minha chaves no html novo, vou te mandar o antigo
                     <td style="font-weight:bold">${timeStr}</td>
                     <td>${tipoBadge}</td>
                     <td>$${data.entryPrice?.toFixed(0) || '-'}</td>
+                    <td>${validadeBadge}</td>
                     <td>${resultado}</td>
                 `;
                 tbody.appendChild(row);
