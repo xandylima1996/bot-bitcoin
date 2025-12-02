@@ -3,208 +3,268 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculadora Bitcoin</title>
+    <title>Painel Bitcoin Bot</title>
+    <!-- Biblioteca Gráfica -->
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
-        body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
         
-        .container {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 20px;
-            width: 100%;
-            max-width: 450px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        /* HEADER */
+        header { 
+            padding: 15px; 
+            background: #161b22; 
+            border-bottom: 1px solid #30363d; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            gap: 10px;
         }
-
-        h2 { margin-top: 0; text-align: center; color: #58a6ff; font-size: 1.3rem; margin-bottom: 20px; }
+        h1 { margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
         
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-size: 0.85rem; color: #8b949e; }
-        
-        input {
-            width: 100%;
-            padding: 12px;
-            background: #0d1117;
-            border: 1px solid #30363d;
-            color: #fff;
+        /* BOTÃO CALCULADORA */
+        .btn-calc {
+            background: #238636;
+            color: white;
+            padding: 6px 12px;
             border-radius: 6px;
-            font-size: 1rem;
-            box-sizing: border-box;
-            font-family: monospace;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: bold;
+            border: 1px solid rgba(240,246,252,0.1);
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
-        input:focus { outline: none; border-color: #58a6ff; }
+        .btn-calc:hover { background: #2ea043; }
 
-        /* Botões de Direção */
-        .dir-row { display: flex; gap: 10px; margin-bottom: 20px; }
-        .btn-dir { 
-            flex: 1; padding: 12px; 
-            background: #21262d; border: 1px solid #30363d; 
-            color: #8b949e; border-radius: 6px; 
-            cursor: pointer; font-weight: bold; font-size: 0.9rem;
-            transition: 0.2s;
+        /* LAYOUT */
+        .container { flex: 1; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
+        
+        #chart-container { 
+            height: 400px; 
+            width: 100%;
+            position: relative; 
+            border-bottom: 1px solid #30363d;
         }
-        .btn-dir.active.up { background: rgba(46, 160, 67, 0.2); color: #2ea043; border-color: #2ea043; }
-        .btn-dir.active.down { background: rgba(218, 54, 51, 0.2); color: #da3633; border-color: #da3633; }
-
-        /* Resultados */
-        .results-grid { 
-            display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; 
-            border-top: 1px solid #30363d; padding-top: 20px;
-        }
-        .res-box {
-            background: #0d1117; padding: 15px; border-radius: 8px; border: 1px solid #30363d; text-align: center;
-        }
-        .res-label { font-size: 0.75rem; color: #8b949e; margin-bottom: 5px; text-transform: uppercase; }
-        .res-val { font-size: 1.2rem; font-weight: bold; }
+        
+        /* PLACAR */
+        #stats-bar { display: flex; gap: 15px; padding: 10px 15px; background: #0d1117; border-bottom: 1px solid #30363d; font-family: monospace; overflow-x: auto; }
+        .stat-box { display: flex; flex-direction: column; min-width: 80px; }
+        .stat-label { font-size: 0.75rem; color: #8b949e; }
+        .stat-val { font-size: 1.1rem; font-weight: bold; }
         .win { color: #2ea043; } .loss { color: #da3633; }
 
-        .btn-back { display: block; width: 100%; text-align: center; margin-top: 20px; color: #58a6ff; text-decoration: none; font-size: 0.9rem; }
+        /* TABELA */
+        #table-wrapper { padding: 10px; padding-bottom: 50px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th { text-align: left; color: #8b949e; padding: 8px; border-bottom: 1px solid #30363d; }
+        td { padding: 8px; border-bottom: 1px solid #21262d; vertical-align: middle; }
         
-        .loading-price { font-size: 0.8rem; text-align: center; color: #d29922; margin-bottom: 10px; display: none; }
+        .badge { padding: 3px 6px; border-radius: 4px; font-size: 0.70rem; font-weight: bold; display: inline-block; white-space: nowrap; }
+        .bg-green { background: rgba(46, 160, 67, 0.2); color: #2ea043; }
+        .bg-red { background: rgba(218, 54, 51, 0.2); color: #da3633; }
+        .bg-gray { background: rgba(110, 118, 129, 0.2); color: #8b949e; }
+        .bg-yellow { background: rgba(210, 153, 34, 0.2); color: #d29922; }
     </style>
 </head>
 <body>
+    <header>
+        <h1>🤖 BTC Bot</h1>
+        <a href="calculadora.html" class="btn-calc">🧮 Calc</a>
+    </header>
 
     <div class="container">
-        <h2>🧮 Calculadora Rápida</h2>
-        
-        <div id="loading" class="loading-price">Buscando preço atual...</div>
-
-        <div class="dir-row">
-            <button class="btn-dir active up" onclick="setDir('UP')">COMPRA (LONG)</button>
-            <button class="btn-dir down" onclick="setDir('DOWN')">VENDA (SHORT)</button>
+        <!-- PLACAR -->
+        <div id="stats-bar">
+            <div class="stat-box">
+                <span class="stat-label">Taxa Acerto</span>
+                <span class="stat-val" id="stat-winrate">--%</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">Trades</span>
+                <span class="stat-val" id="stat-total">0</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">Último</span>
+                <span class="stat-val" id="stat-last">--</span>
+            </div>
+            <div id="connection-status" style="font-size: 0.7rem; color: #8b949e; align-self: center;">Conectando...</div>
         </div>
 
-        <div style="display: flex; gap: 10px;">
-            <div class="form-group" style="flex: 1;">
-                <label>Investimento ($)</label>
-                <input type="number" id="invest" value="100" oninput="calc()">
-            </div>
-            <div class="form-group" style="flex: 1;">
-                <label>Alavancagem (x)</label>
-                <input type="number" id="lev" value="1" min="1" max="125" oninput="calc()">
-            </div>
-        </div>
+        <!-- GRÁFICO -->
+        <div id="chart-container"></div>
 
-        <div class="form-group">
-            <label>Preço Entrada ($) (Atual)</label>
-            <input type="number" id="entry" placeholder="Carregando..." oninput="recalcTargets()">
+        <!-- TABELA -->
+        <div id="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Tipo</th>
+                        <th>Entrada</th>
+                        <th>Validade</th>
+                        <th>Resultado</th>
+                    </tr>
+                </thead>
+                <tbody id="trade-table"></tbody>
+            </table>
         </div>
-
-        <div style="display: flex; gap: 10px;">
-            <div class="form-group" style="flex: 1;">
-                <label>Alvo / Saída ($)</label>
-                <input type="number" id="target" oninput="calc()">
-            </div>
-            <div class="form-group" style="flex: 1;">
-                <label>Stop Loss ($)</label>
-                <input type="number" id="stop" oninput="calc()">
-            </div>
-        </div>
-
-        <!-- Resultados Lado a Lado -->
-        <div class="results-grid">
-            <div class="res-box" style="border-color: rgba(46, 160, 67, 0.3);">
-                <div class="res-label">Se bater no Alvo</div>
-                <div id="res-win" class="res-val win">$0.00</div>
-                <div id="res-win-pct" style="font-size: 0.8rem; color: #2ea043;">0.00%</div>
-            </div>
-            <div class="res-box" style="border-color: rgba(218, 54, 51, 0.3);">
-                <div class="res-label">Se bater no Stop</div>
-                <div id="res-loss" class="res-val loss">-$0.00</div>
-                <div id="res-loss-pct" style="font-size: 0.8rem; color: #da3633;">0.00%</div>
-            </div>
-        </div>
-
-        <a href="index.html" class="btn-back">← Voltar para o Dashboard</a>
     </div>
 
-    <script>
-        let currentPrice = 0;
-        let dir = 'UP';
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-        // 1. Busca o preço real assim que abre a página
-        async function fetchPrice() {
-            const loading = document.getElementById('loading');
-            loading.style.display = 'block';
+        // =================================================================
+        // ✅ CHAVES FIREBASE CONFIGURADAS ✅
+        // =================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyAegLQL6VMHwDKeG0yvi5AjhlmcgNHCPN4",
+            authDomain: "bitcoin-tracker-4d96c.firebaseapp.com",
+            projectId: "bitcoin-tracker-4d96c",
+            storageBucket: "bitcoin-tracker-4d96c.firebasestorage.app",
+            messagingSenderId: "821670432068",
+            appId: "1:821670432068:web:92af69c44d92741c155b11",
+            measurementId: "G-WFZVQB3LRN"
+        };
+
+        let db;
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            document.getElementById('connection-status').innerText = "• Online";
+            document.getElementById('connection-status').style.color = "#2ea043";
+        } catch (e) {
+            console.error(e);
+            document.getElementById('connection-status').innerText = "• Offline";
+            document.getElementById('connection-status').style.color = "#da3633";
+        }
+
+        // --- CONFIGURAÇÃO DO GRÁFICO (MODO MOBILE FRIENDLY) ---
+        const chart = LightweightCharts.createChart(document.getElementById('chart-container'), { 
+            layout: { textColor: '#d1d4dc', background: { type: 'solid', color: '#0d1117' } },
+            grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
+            rightPriceScale: { borderColor: '#30363d' },
+            localization: { locale: 'pt-BR', dateFormat: 'dd/MM/yyyy' },
+            timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#30363d' },
+            handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: false }, 
+            handleScroll: { mouseWheel: false, pressedMouseMove: false, vertTouchDrag: false, horzTouchDrag: false } 
+        });
+
+        const candleSeries = chart.addCandlestickSeries({ upColor: '#2ea043', downColor: '#da3633', borderVisible: false, wickUpColor: '#2ea043', wickDownColor: '#da3633' });
+        const bbUpper = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
+        const bbLower = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
+        const bbBasis = chart.addLineSeries({ color: 'rgba(210, 153, 34, 0.5)', lineWidth: 1, lineStyle: 2 });
+
+        function calculateBB(data, period = 20, stdDev = 2) {
+            let result = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) { result.push({ time: data[i].time }); continue; }
+                let slice = data.slice(i - period + 1, i + 1);
+                let sum = slice.reduce((a, b) => a + b.close, 0);
+                let mean = sum / period;
+                let squaredDiffs = slice.map(x => Math.pow(x.close - mean, 2));
+                let std = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / period);
+                result.push({ time: data[i].time, upper: mean + (std * stdDev), lower: mean - (std * stdDev), basis: mean });
+            }
+            return result;
+        }
+
+        async function loadChartData() {
             try {
-                const res = await fetch('https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD');
-                const data = await res.json();
-                currentPrice = data.USD;
-                
-                document.getElementById('entry').value = currentPrice;
-                recalcTargets(); // Preenche Stop e Alvo automaticamente
-                loading.style.display = 'none';
-            } catch (e) {
-                loading.innerText = "Erro ao buscar preço. Digite manualmente.";
-                loading.style.color = "#da3633";
-            }
+                const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=200');
+                const json = await res.json();
+                const candles = json.Data.Data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
+                candleSeries.setData(candles);
+                const bbData = calculateBB(candles);
+                const validBB = bbData.filter(d => d.upper);
+                bbUpper.setData(validBB.map(d => ({ time: d.time, value: d.upper })));
+                bbLower.setData(validBB.map(d => ({ time: d.time, value: d.lower })));
+                bbBasis.setData(validBB.map(d => ({ time: d.time, value: d.basis })));
+            } catch (e) { console.error("Erro gráfico", e); }
         }
 
-        // 2. Define Stop e Alvo automáticos (Stop 1.5% | Alvo 3%)
-        function recalcTargets() {
-            const entry = parseFloat(document.getElementById('entry').value) || currentPrice;
-            if (!entry) return;
-
-            // Configuração Padrão do Robô
-            const stopPct = 0.015; // 1.5%
-            const targetPct = 0.03; // 3.0% (Relação 2:1)
-
-            let stopPrice, targetPrice;
-
-            if (dir === 'UP') {
-                stopPrice = entry * (1 - stopPct);
-                targetPrice = entry * (1 + targetPct);
-            } else {
-                stopPrice = entry * (1 + stopPct);
-                targetPrice = entry * (1 - targetPct);
-            }
-
-            // Preenche os campos (apenas se o usuário não estiver digitando neles)
-            // Aqui vamos forçar a atualização para ajudar
-            document.getElementById('stop').value = stopPrice.toFixed(2);
-            document.getElementById('target').value = targetPrice.toFixed(2);
+        async function loadHistory() {
+            if (!db) return;
+            const q = query(collection(db, "historico_bitcoin"), orderBy("timestamp", "desc"), limit(50));
+            const snapshot = await getDocs(q);
+            const tbody = document.getElementById('trade-table');
+            tbody.innerHTML = '';
+            let wins = 0, total = 0;
+            const newMarkers = [];
             
-            calc();
+            // Hora atual para validade
+            const now = Date.now();
+
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.action !== 'ENTRY' && data.action !== 'EXIT') return; 
+
+                const row = document.createElement('tr');
+                const date = new Date(data.timestamp);
+                const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                
+                let tipoBadge = `<span class="badge bg-gray">${data.action}</span>`;
+                if (data.action === 'ENTRY') {
+                    tipoBadge = data.direction === 'UP' ? `<span class="badge bg-green">COMPRA</span>` : `<span class="badge bg-red">VENDA</span>`;
+                } else { tipoBadge = `<span class="badge bg-gray">SAÍDA</span>`; }
+
+                let resultado = '-';
+                if (data.outcome === 'WIN') { resultado = `<span class="badge bg-green">+${data.profit_pct?.toFixed(2)}%</span>`; wins++; }
+                else if (data.outcome === 'LOSS') { resultado = `<span class="badge bg-red">${data.profit_pct?.toFixed(2)}%</span>`; }
+                
+                if (data.outcome === 'WIN' || data.outcome === 'LOSS') total++;
+                
+                // Validade
+                let validadeBadge = '-';
+                if (data.action === 'ENTRY') {
+                    const diffMinutes = (now - data.timestamp) / (1000 * 60);
+                    if (diffMinutes < 5) validadeBadge = `<span class="badge bg-green">⚡ IDEAL (${Math.floor(diffMinutes)}m)</span>`;
+                    else if (diffMinutes < 15) validadeBadge = `<span class="badge bg-yellow">⚠️ ATRASADO (${Math.floor(diffMinutes)}m)</span>`;
+                    else validadeBadge = `<span class="badge bg-gray">❌ EXPIRADO</span>`;
+                } else {
+                    validadeBadge = `<span class="badge bg-gray">FECHADO</span>`;
+                }
+
+                if (total === 1) {
+                    const el = document.getElementById('stat-last');
+                    el.innerText = data.outcome || 'PENDING';
+                    el.className = 'stat-val ' + (data.outcome === 'WIN' ? 'win' : (data.outcome === 'LOSS' ? 'loss' : ''));
+                }
+
+                row.innerHTML = `
+                    <td style="font-weight:bold">${timeStr}</td>
+                    <td>${tipoBadge}</td>
+                    <td>$${data.entryPrice?.toFixed(0) || '-'}</td>
+                    <td>${validadeBadge}</td>
+                    <td>${resultado}</td>
+                `;
+                tbody.appendChild(row);
+
+                if (data.action === 'ENTRY') {
+                    newMarkers.push({
+                        time: data.timestamp / 1000,
+                        position: data.direction === 'UP' ? 'belowBar' : 'aboveBar',
+                        color: data.direction === 'UP' ? '#2ea043' : '#da3633',
+                        shape: data.direction === 'UP' ? 'arrowUp' : 'arrowDown',
+                        text: data.direction === 'UP' ? 'B' : 'S'
+                    });
+                }
+            });
+            candleSeries.setMarkers(newMarkers);
+            document.getElementById('stat-total').innerText = total;
+            if (total > 0) {
+                const winRate = (wins / total) * 100;
+                const el = document.getElementById('stat-winrate');
+                el.innerText = winRate.toFixed(0) + '%';
+                el.className = 'stat-val ' + (winRate >= 50 ? 'win' : 'loss');
+            } else { document.getElementById('stat-winrate').innerText = '--%'; }
         }
 
-        function setDir(d) {
-            dir = d;
-            document.querySelector('.up').className = 'btn-dir up' + (d === 'UP' ? ' active' : '');
-            document.querySelector('.down').className = 'btn-dir down' + (d === 'DOWN' ? ' active' : '');
-            recalcTargets(); // Recalcula Stop/Alvo para a nova direção
-        }
-
-        function calc() {
-            const invest = parseFloat(document.getElementById('invest').value) || 0;
-            const lev = parseFloat(document.getElementById('lev').value) || 1;
-            const entry = parseFloat(document.getElementById('entry').value);
-            const target = parseFloat(document.getElementById('target').value);
-            const stop = parseFloat(document.getElementById('stop').value);
-
-            if (!entry || !target || !stop) return;
-
-            // Cálculo do Lucro (Alvo)
-            let winPctRaw = dir === 'UP' ? ((target - entry)/entry) : ((entry - target)/entry);
-            let winPct = winPctRaw * 100 * lev;
-            let winUsd = invest * (winPct / 100);
-
-            // Cálculo do Prejuízo (Stop)
-            let lossPctRaw = dir === 'UP' ? ((stop - entry)/entry) : ((entry - stop)/entry);
-            let lossPct = lossPctRaw * 100 * lev;
-            let lossUsd = invest * (lossPct / 100);
-
-            // Atualiza UI
-            document.getElementById('res-win').innerText = '+$' + winUsd.toFixed(2);
-            document.getElementById('res-win-pct').innerText = winPct.toFixed(2) + '%';
-
-            document.getElementById('res-loss').innerText = '-$' + Math.abs(lossUsd).toFixed(2);
-            document.getElementById('res-loss-pct').innerText = lossPct.toFixed(2) + '%';
-        }
-
-        // Inicia
-        fetchPrice();
+        async function start() { await loadChartData(); await loadHistory(); }
+        start();
+        setInterval(start, 60000); 
+        new ResizeObserver(entries => { if (entries.length === 0) return; const newRect = entries[0].contentRect; chart.applyOptions({ height: newRect.height, width: newRect.width }); }).observe(document.getElementById('chart-container'));
     </script>
 </body>
 </html>
