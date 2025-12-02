@@ -6,7 +6,18 @@
     <title>Painel Bitcoin Bot</title>
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
-        body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
+        /* CORREÇÃO 1: Usar 100dvh para melhor ajuste em celulares modernos */
+        body { 
+            background-color: #0d1117; 
+            color: #c9d1d9; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            height: 100dvh; /* Dynamic Viewport Height para mobile */
+        }
         
         /* HEADER */
         header { 
@@ -17,6 +28,7 @@
             justify-content: space-between; 
             align-items: center; 
             gap: 10px;
+            flex-shrink: 0; /* Garante que o cabeçalho não encolha */
         }
         h1 { margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
         
@@ -44,12 +56,25 @@
             width: 100%;
             position: relative; 
             border-bottom: 1px solid #30363d;
+            flex-shrink: 0; /* Garante que o gráfico mantenha a altura */
         }
         
-        /* PLACAR */
-        #stats-bar { display: flex; gap: 15px; padding: 10px 15px; background: #0d1117; border-bottom: 1px solid #30363d; font-family: monospace; overflow-x: auto; }
-        .stat-box { display: flex; flex-direction: column; min-width: 80px; }
-        .stat-label { font-size: 0.75rem; color: #8b949e; }
+        /* CORREÇÃO 2: PLACAR (STATS BAR) */
+        #stats-bar { 
+            display: flex; 
+            gap: 20px; /* Aumentei o espaço entre os itens */
+            padding: 15px 15px; /* Aumentei o espaço interno (cima/baixo) */
+            background: #0d1117; 
+            border-bottom: 1px solid #30363d; 
+            font-family: monospace; 
+            overflow-x: auto; 
+            flex-shrink: 0; /* IMPORTANTE: Impede que o gráfico esmague essa barra */
+            min-height: 50px; /* Garante altura mínima */
+            align-items: center;
+        }
+        
+        .stat-box { display: flex; flex-direction: column; min-width: 80px; justify-content: center; }
+        .stat-label { font-size: 0.75rem; color: #8b949e; margin-bottom: 4px; }
         .stat-val { font-size: 1.1rem; font-weight: bold; }
         .win { color: #2ea043; } .loss { color: #da3633; }
 
@@ -183,7 +208,7 @@
         }
 
         // ======================================================
-        // FUNÇÃO DE HISTÓRICO ATUALIZADA (CORREÇÃO DA TAXA)
+        // FUNÇÃO DE HISTÓRICO ATUALIZADA
         // ======================================================
         async function loadHistory() {
             if (!db) return;
