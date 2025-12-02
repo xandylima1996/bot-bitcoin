@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Bitcoin Bot</title>
-    <!-- Biblioteca Gráfica -->
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
         
         /* HEADER */
         header { 
-            ppadding: 15px 20px; 
+            padding: 15px 20px; 
             background: #161b22; 
             border-bottom: 1px solid #30363d; 
             display: flex; 
@@ -74,7 +73,6 @@
     </header>
 
     <div class="container">
-        <!-- PLACAR -->
         <div id="stats-bar">
             <div class="stat-box">
                 <span class="stat-label">Taxa Acerto</span>
@@ -91,10 +89,8 @@
             <div id="connection-status" style="font-size: 0.7rem; color: #8b949e; align-self: center;">Conectando...</div>
         </div>
 
-        <!-- GRÁFICO -->
         <div id="chart-container"></div>
 
-        <!-- TABELA -->
         <div id="table-wrapper">
             <table>
                 <thead>
@@ -186,85 +182,129 @@
             } catch (e) { console.error("Erro gráfico", e); }
         }
 
+        // ======================================================
+        // FUNÇÃO DE HISTÓRICO ATUALIZADA (CORREÇÃO DA TAXA)
+        // ======================================================
         async function loadHistory() {
             if (!db) return;
+            
             const q = query(collection(db, "historico_bitcoin"), orderBy("timestamp", "desc"), limit(50));
-            const snapshot = await getDocs(q);
-            const tbody = document.getElementById('trade-table');
-            tbody.innerHTML = '';
-            let wins = 0, total = 0;
-            const newMarkers = [];
-            const now = Date.now();
-
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                if (data.action !== 'ENTRY' && data.action !== 'EXIT') return; 
-
-                const row = document.createElement('tr');
-                const date = new Date(data.timestamp);
-                const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            
+            try {
+                const snapshot = await getDocs(q);
+                const tbody = document.getElementById('trade-table');
+                tbody.innerHTML = '';
                 
-                let tipoBadge = `<span class="badge bg-gray">${data.action}</span>`;
-                if (data.action === 'ENTRY') {
-                    tipoBadge = data.direction === 'UP' ? `<span class="badge bg-green">COMPRA</span>` : `<span class="badge bg-red">VENDA</span>`;
-                } else { tipoBadge = `<span class="badge bg-gray">SAÍDA</span>`; }
+                let wins = 0;
+                let total_fechados = 0; 
+                let total_geral = 0;    
+                
+                const newMarkers = [];
+                const now = Date.now();
 
-                let resultado = '-';
-                if (data.outcome === 'WIN') { resultado = `<span class="badge bg-green">+${data.profit_pct?.toFixed(2)}%</span>`; wins++; }
-                else if (data.outcome === 'LOSS') { resultado = `<span class="badge bg-red">${data.profit_pct?.toFixed(2)}%</span>`; }
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.action !== 'ENTRY' && data.action !== 'EXIT') return; 
+
+                    total_geral++;
+
+                    // Contagem segura (ignora diferença de maiúscula/minúscula)
+                    const outcome = data.outcome ? data.outcome.toString().toUpperCase().trim() : null;
+                    
+                    if (outcome === 'WIN') {
+                        wins++;
+                        total_fechados++;
+                    } else if (outcome === 'LOSS') {
+                        total_fechados++;
+                    }
+
+                    // Tabela
+                    const row = document.createElement('tr');
+                    const date = new Date(data.timestamp);
+                    const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    
+                    let tipoBadge = `<span class="badge bg-gray">${data.action}</span>`;
+                    if (data.action === 'ENTRY') {
+                        tipoBadge = data.direction === 'UP' ? `<span class="badge bg-green">COMPRA</span>` : `<span class="badge bg-red">VENDA</span>`;
+                    } else { 
+                        tipoBadge = `<span class="badge bg-gray">SAÍDA</span>`; 
+                    }
+
+                    let resultado = '-';
+                    const profit = data.profit_pct ? parseFloat(data.profit_pct) : 0;
+
+                    if (outcome === 'WIN') { 
+                        resultado = `<span class="badge bg-green">+${profit.toFixed(2)}%</span>`; 
+                    } else if (outcome === 'LOSS') { 
+                        resultado = `<span class="badge bg-red">${profit.toFixed(2)}%</span>`; 
+                    }
+                    
+                    let validadeBadge = '-';
+                    if (data.action === 'ENTRY') {
+                        const diffMinutes = (now - data.timestamp) / (1000 * 60);
+                        if (diffMinutes < 5) validadeBadge = `<span class="badge bg-green">⚡ IDEAL (${Math.floor(diffMinutes)}m)</span>`;
+                        else if (diffMinutes < 15) validadeBadge = `<span class="badge bg-yellow">⚠️ ATRASADO (${Math.floor(diffMinutes)}m)</span>`;
+                        else validadeBadge = `<span class="badge bg-gray">❌ EXPIRADO</span>`;
+                    } else {
+                        validadeBadge = `<span class="badge bg-gray">FECHADO</span>`;
+                    }
+
+                    const entryPriceStr = data.entryPrice ? `$${data.entryPrice.toFixed(0)}` : '-';
+                    const alvoStr = (data.action === 'ENTRY' && data.takeProfit) ? `$${data.takeProfit.toFixed(0)}` : '-';
+                    const stopStr = (data.action === 'ENTRY' && data.stopLoss) ? `$${data.stopLoss.toFixed(0)}` : '-';
+
+                    // Atualiza o "Último"
+                    if (total_geral === 1) {
+                        const elLast = document.getElementById('stat-last');
+                        if(outcome === 'WIN' || outcome === 'LOSS') {
+                            elLast.innerText = outcome;
+                            elLast.className = 'stat-val ' + (outcome === 'WIN' ? 'win' : 'loss');
+                        } else {
+                            elLast.innerText = 'AGUARDANDO';
+                            elLast.className = 'stat-val';
+                        }
+                    }
+
+                    row.innerHTML = `
+                        <td style="font-weight:bold">${timeStr}</td>
+                        <td>${tipoBadge}</td>
+                        <td>${entryPriceStr}</td>
+                        <td style="color: #2ea043">${alvoStr}</td>
+                        <td style="color: #da3633">${stopStr}</td>
+                        <td>${validadeBadge}</td>
+                        <td>${resultado}</td>
+                    `;
+                    tbody.appendChild(row);
+
+                    if (data.action === 'ENTRY') {
+                        newMarkers.push({
+                            time: data.timestamp / 1000,
+                            position: data.direction === 'UP' ? 'belowBar' : 'aboveBar',
+                            color: data.direction === 'UP' ? '#2ea043' : '#da3633',
+                            shape: data.direction === 'UP' ? 'arrowUp' : 'arrowDown',
+                            text: data.direction === 'UP' ? 'B' : 'S'
+                        });
+                    }
+                });
+
+                candleSeries.setMarkers(newMarkers);
                 
-                if (data.outcome === 'WIN' || data.outcome === 'LOSS') total++;
-                
-                // Validade
-                let validadeBadge = '-';
-                if (data.action === 'ENTRY') {
-                    const diffMinutes = (now - data.timestamp) / (1000 * 60);
-                    if (diffMinutes < 5) validadeBadge = `<span class="badge bg-green">⚡ IDEAL (${Math.floor(diffMinutes)}m)</span>`;
-                    else if (diffMinutes < 15) validadeBadge = `<span class="badge bg-yellow">⚠️ ATRASADO (${Math.floor(diffMinutes)}m)</span>`;
-                    else validadeBadge = `<span class="badge bg-gray">❌ EXPIRADO</span>`;
-                } else {
-                    validadeBadge = `<span class="badge bg-gray">FECHADO</span>`;
+                // Placar
+                document.getElementById('stat-total').innerText = total_fechados;
+
+                if (total_fechados > 0) {
+                    const winRate = (wins / total_fechados) * 100;
+                    const elWin = document.getElementById('stat-winrate');
+                    elWin.innerText = winRate.toFixed(0) + '%';
+                    elWin.className = 'stat-val ' + (winRate >= 50 ? 'win' : 'loss');
+                } else { 
+                    document.getElementById('stat-winrate').innerText = '--%'; 
+                    document.getElementById('stat-winrate').className = 'stat-val';
                 }
 
-                // Alvo e Stop
-                const alvoStr = (data.action === 'ENTRY' && data.takeProfit) ? `$${data.takeProfit.toFixed(0)}` : '-';
-                const stopStr = (data.action === 'ENTRY' && data.stopLoss) ? `$${data.stopLoss.toFixed(0)}` : '-';
-
-                if (total === 1) {
-                    const el = document.getElementById('stat-last');
-                    el.innerText = data.outcome || 'PENDING';
-                    el.className = 'stat-val ' + (data.outcome === 'WIN' ? 'win' : (data.outcome === 'LOSS' ? 'loss' : ''));
-                }
-
-                row.innerHTML = `
-                    <td style="font-weight:bold">${timeStr}</td>
-                    <td>${tipoBadge}</td>
-                    <td>$${data.entryPrice?.toFixed(0) || '-'}</td>
-                    <td style="color: #2ea043">${alvoStr}</td>
-                    <td style="color: #da3633">${stopStr}</td>
-                    <td>${validadeBadge}</td>
-                    <td>${resultado}</td>
-                `;
-                tbody.appendChild(row);
-
-                if (data.action === 'ENTRY') {
-                    newMarkers.push({
-                        time: data.timestamp / 1000,
-                        position: data.direction === 'UP' ? 'belowBar' : 'aboveBar',
-                        color: data.direction === 'UP' ? '#2ea043' : '#da3633',
-                        shape: data.direction === 'UP' ? 'arrowUp' : 'arrowDown',
-                        text: data.direction === 'UP' ? 'B' : 'S'
-                    });
-                }
-            });
-            candleSeries.setMarkers(newMarkers);
-            document.getElementById('stat-total').innerText = total;
-            if (total > 0) {
-                const winRate = (wins / total) * 100;
-                const el = document.getElementById('stat-winrate');
-                el.innerText = winRate.toFixed(0) + '%';
-                el.className = 'stat-val ' + (winRate >= 50 ? 'win' : 'loss');
-            } else { document.getElementById('stat-winrate').innerText = '--%'; }
+            } catch (e) {
+                console.error("Erro ao carregar histórico:", e);
+            }
         }
 
         async function start() { await loadChartData(); await loadHistory(); }
