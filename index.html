@@ -65,6 +65,49 @@
             width: 100%; 
         }
 
+        /* --- ESTILOS DO NOVO "TERMÔMETRO" --- */
+        #market-status {
+            padding: 10px 15px;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            flex-shrink: 0;
+        }
+        .status-title {
+            font-size: 0.85rem;
+            color: #8b949e;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        #status-bar-container {
+            width: 100%;
+            height: 15px;
+            background-color: #30363d;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        #status-bar-fill {
+            height: 100%;
+            width: 50%; /* Posição inicial */
+            background-color: #2ea043;
+            transition: width 0.5s ease-out, background-color 0.5s ease-out;
+            border-radius: 8px;
+        }
+        #status-bar-text {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 1px 1px 2px #00000050;
+        }
+
         /* --- BOTÕES DE NAVEGAÇÃO FLUTUANTES --- */
         #chart-controls {
             position: absolute;
@@ -159,6 +202,14 @@
             <div id="connection-status" style="font-size: 0.7rem; color: #8b949e; align-self: center;">Conectando...</div>
         </div>
 
+        <div id="market-status">
+            <div class="status-title" id="market-status-title">STATUS DE MERCADO: </div>
+            <div id="status-bar-container">
+                <div id="status-bar-fill"></div>
+                <div id="status-bar-text">CARREGANDO DADOS...</div>
+            </div>
+        </div>
+
         <div id="chart-wrapper">
             <div id="chart-container"></div>
             <div id="chart-controls">
@@ -200,7 +251,6 @@
             measurementId: "G-WFZVQB3LRN"
         };
 
-        // --- CORREÇÃO DE FUSO HORÁRIO (SINCRONIZA GRÁFICO E TABELA) ---
         const timezoneOffset = new Date().getTimezoneOffset() * 60;
 
         let db;
@@ -264,23 +314,84 @@
             return result;
         }
 
+        // --- NOVA FUNÇÃO PARA ATUALIZAR O TERMÔMETRO ---
+        function updateMarketStatus(currentPrice, bbUpper, bbLower, bbBasis) {
+            const range = bbUpper - bbLower;
+            const distanceToUpper = bbUpper - currentPrice;
+            const distanceToLower = currentPrice - bbLower;
+            const fillElement = document.getElementById('status-bar-fill');
+            const textElement = document.getElementById('status-bar-text');
+
+            // 1. Calcula Posição
+            let position = (currentPrice - bbLower) / range;
+            position = Math.max(0, Math.min(1, position)); // Garante que esteja entre 0 e 1
+
+            // 2. Define o Alvo (Centro)
+            let centerPos = (bbBasis - bbLower) / range;
+            centerPos = Math.max(0, Math.min(1, centerPos));
+
+            let statusText = "MERCADO NEUTRO";
+            let color = "#2ea043"; // Verde (Neutro)
+            let width = position * 100;
+
+            const isNearUpper = distanceToUpper / range < 0.2; // 20% do range
+            const isNearLower = distanceToLower / range < 0.2; // 20% do range
+
+            if (isNearUpper) {
+                // Preço perto da banda superior (Alerta Venda)
+                statusText = `🔴 ALERTA VENDA: ${distanceToUpper.toFixed(0)} USD p/ Banda Superior`;
+                color = "#da3633"; // Vermelho
+            } else if (isNearLower) {
+                // Preço perto da banda inferior (Alerta Compra)
+                statusText = `🟢 ALERTA COMPRA: ${distanceToLower.toFixed(0)} USD p/ Banda Inferior`;
+                color = "#238636"; // Verde Escuro
+            } else {
+                // Preço no meio (Neutro/Busca pela Média)
+                 statusText = `🟡 NEUTRO: ${Math.abs(currentPrice - bbBasis).toFixed(0)} USD p/ Média Central`;
+                color = "#d29922"; // Amarelo
+            }
+
+            // 3. Atualiza os Elementos
+            fillElement.style.width = `${width}%`;
+            fillElement.style.backgroundColor = color;
+            textElement.innerText = statusText;
+            
+            // Coloca um indicador visual da média central na barra
+            // fillElement.style.boxShadow = `inset 0 0 0 1px #0d1117, inset 0 0 0 3px ${color}`; 
+        }
+
         async function loadChartData() {
             try {
                 // AQUI ESTÁ A MUDANÇA: limit=2000 (aprox. 33 horas de histórico)
                 const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=2000');
                 const json = await res.json();
-                
-                const candles = json.Data.Data.map(d => ({ 
-                    time: d.time - timezoneOffset, // Ajuste de fuso horário
+                const rawData = json.Data.Data;
+
+                const candles = rawData.map(d => ({ 
+                    time: d.time - timezoneOffset, 
                     open: d.open, high: d.high, low: d.low, close: d.close 
                 }));
                 
                 candleSeries.setData(candles);
                 const bbData = calculateBB(candles);
                 const validBB = bbData.filter(d => d.upper);
+
                 bbUpper.setData(validBB.map(d => ({ time: d.time, value: d.upper })));
                 bbLower.setData(validBB.map(d => ({ time: d.time, value: d.lower })));
                 bbBasis.setData(validBB.map(d => ({ time: d.time, value: d.basis })));
+
+                // --- ATUALIZAÇÃO DO TERMÔMETRO AQUI ---
+                if (rawData.length > 20) {
+                    const lastCandle = rawData[rawData.length - 1];
+                    const lastBB = bbData[bbData.length - 1];
+
+                    if (lastBB.upper && lastBB.lower && lastBB.basis) {
+                         updateMarketStatus(lastCandle.close, lastBB.upper, lastBB.lower, lastBB.basis);
+                    } else {
+                        document.getElementById('status-bar-text').innerText = "CALCULANDO BB...";
+                    }
+                }
+
             } catch (e) { console.error("Erro gráfico", e); }
         }
 
@@ -325,7 +436,7 @@
                     let resultado = '-';
                     const profit = data.profit_pct ? parseFloat(data.profit_pct) : 0;
                     if (outcome === 'WIN') { resultado = `<span class="badge bg-green">+${profit.toFixed(2)}%</span>`; } 
-                    else if (outcome === 'LOSS') { resultado = `<span class="badge bg-red">${profit.toFixed(2)}%</span>`; }
+                    else if (outcome === 'LOSS') { resultado = `<span class="badge bg-red">${profit.toFixed(2)}%`; }
                     
                     let validadeBadge = '-';
                     if (data.action === 'ENTRY') {
@@ -363,7 +474,7 @@
 
                     if (data.action === 'ENTRY') {
                         newMarkers.push({
-                            time: (data.timestamp / 1000) - timezoneOffset, // Ajuste de fuso nos marcadores
+                            time: (data.timestamp / 1000) - timezoneOffset, 
                             position: data.direction === 'UP' ? 'belowBar' : 'aboveBar',
                             color: data.direction === 'UP' ? '#2ea043' : '#da3633',
                             shape: data.direction === 'UP' ? 'arrowUp' : 'arrowDown',
