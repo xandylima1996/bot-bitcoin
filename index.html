@@ -2,11 +2,11 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Painel Bitcoin Bot</title>
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
-        /* CORREÇÃO 1: Usar 100dvh para melhor ajuste em celulares modernos */
+        /* AJUSTE MOBILE: 100dvh e travamento de zoom indesejado */
         body { 
             background-color: #0d1117; 
             color: #c9d1d9; 
@@ -16,7 +16,7 @@
             display: flex; 
             flex-direction: column; 
             height: 100vh; 
-            height: 100dvh; /* Dynamic Viewport Height para mobile */
+            height: 100dvh; 
         }
         
         /* HEADER */
@@ -28,7 +28,7 @@
             justify-content: space-between; 
             align-items: center; 
             gap: 10px;
-            flex-shrink: 0; /* Garante que o cabeçalho não encolha */
+            flex-shrink: 0; 
         }
         h1 { margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
         
@@ -48,28 +48,73 @@
         }
         .btn-calc:hover { background: #2ea043; }
 
-        /* LAYOUT */
+        /* LAYOUT CONTAINER */
         .container { flex: 1; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
         
-        #chart-container { 
-            height: 400px; 
+        /* CONTAINER DO GRÁFICO (POSIÇÃO RELATIVA PARA OS BOTÕES FLUTUAREM) */
+        #chart-wrapper {
+            position: relative;
             width: 100%;
-            position: relative; 
+            height: 400px;
             border-bottom: 1px solid #30363d;
-            flex-shrink: 0; /* Garante que o gráfico mantenha a altura */
+            flex-shrink: 0;
+        }
+
+        #chart-container { 
+            height: 100%; 
+            width: 100%; 
+        }
+
+        /* --- NOVOS BOTÕES DE NAVEGAÇÃO FLUTUANTES --- */
+        #chart-controls {
+            position: absolute;
+            bottom: 15px; /* Fica na parte de baixo do gráfico */
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 10;
+            background: rgba(13, 17, 23, 0.8); /* Fundo semi-transparente */
+            padding: 8px 15px;
+            border-radius: 20px;
+            border: 1px solid #30363d;
+            backdrop-filter: blur(4px);
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: #c9d1d9;
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0 5px;
+            display: flex;
+            align-items: center;
         }
         
-        /* CORREÇÃO 2: PLACAR (STATS BAR) */
+        .nav-btn:active { transform: scale(0.9); color: #58a6ff; }
+
+        #btn-reset {
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: #2ea043;
+            border: 1px solid #238636;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(35, 134, 54, 0.1);
+        }
+
+        /* PLACAR (STATS BAR) */
         #stats-bar { 
             display: flex; 
-            gap: 20px; /* Aumentei o espaço entre os itens */
-            padding: 15px 15px; /* Aumentei o espaço interno (cima/baixo) */
+            gap: 20px; 
+            padding: 15px 15px; 
             background: #0d1117; 
             border-bottom: 1px solid #30363d; 
             font-family: monospace; 
             overflow-x: auto; 
-            flex-shrink: 0; /* IMPORTANTE: Impede que o gráfico esmague essa barra */
-            min-height: 50px; /* Garante altura mínima */
+            flex-shrink: 0; 
+            min-height: 50px; 
             align-items: center;
         }
         
@@ -114,7 +159,14 @@
             <div id="connection-status" style="font-size: 0.7rem; color: #8b949e; align-self: center;">Conectando...</div>
         </div>
 
-        <div id="chart-container"></div>
+        <div id="chart-wrapper">
+            <div id="chart-container"></div>
+            <div id="chart-controls">
+                <button class="nav-btn" id="pan-left">⬅️</button>
+                <button class="nav-btn" id="btn-reset">🔴 AO VIVO</button>
+                <button class="nav-btn" id="pan-right">➡️</button>
+            </div>
+        </div>
 
         <div id="table-wrapper">
             <table>
@@ -138,9 +190,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-        // =================================================================
-        // ✅ CHAVES FIREBASE CONFIGURADAS ✅
-        // =================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyAegLQL6VMHwDKeG0yvi5AjhlmcgNHCPN4",
             authDomain: "bitcoin-tracker-4d96c.firebaseapp.com",
@@ -169,15 +218,41 @@
             grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
             rightPriceScale: { borderColor: '#30363d' },
             localization: { locale: 'pt-BR', dateFormat: 'dd/MM/yyyy' },
-            timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#30363d' },
-            handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: false }, 
-            handleScroll: { mouseWheel: false, pressedMouseMove: false, vertTouchDrag: false, horzTouchDrag: false } 
+            // IMPORTANTE: vertTouchDrag: false permite rolar a página tocando no gráfico
+            handleScroll: { mouseWheel: false, pressedMouseMove: false, vertTouchDrag: false, horzTouchDrag: true },
+            handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: true }, 
+            timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#30363d' }
         });
 
         const candleSeries = chart.addCandlestickSeries({ upColor: '#2ea043', downColor: '#da3633', borderVisible: false, wickUpColor: '#2ea043', wickDownColor: '#da3633' });
         const bbUpper = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
         const bbLower = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
         const bbBasis = chart.addLineSeries({ color: 'rgba(210, 153, 34, 0.5)', lineWidth: 1, lineStyle: 2 });
+
+        // --- LÓGICA DOS BOTÕES DE NAVEGAÇÃO ---
+        document.getElementById('pan-left').addEventListener('click', () => {
+            const logicalRange = chart.timeScale().getVisibleLogicalRange();
+            if (logicalRange) {
+                chart.timeScale().setVisibleLogicalRange({
+                    from: logicalRange.from - 10, // Volta 10 candles
+                    to: logicalRange.to - 10
+                });
+            }
+        });
+
+        document.getElementById('pan-right').addEventListener('click', () => {
+            const logicalRange = chart.timeScale().getVisibleLogicalRange();
+            if (logicalRange) {
+                chart.timeScale().setVisibleLogicalRange({
+                    from: logicalRange.from + 10, // Avança 10 candles
+                    to: logicalRange.to + 10
+                });
+            }
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            chart.timeScale().scrollToRealTime(); // Vai para o candle atual
+        });
 
         function calculateBB(data, period = 20, stdDev = 2) {
             let result = [];
@@ -207,9 +282,6 @@
             } catch (e) { console.error("Erro gráfico", e); }
         }
 
-        // ======================================================
-        // FUNÇÃO DE HISTÓRICO ATUALIZADA
-        // ======================================================
         async function loadHistory() {
             if (!db) return;
             
@@ -233,7 +305,6 @@
 
                     total_geral++;
 
-                    // Contagem segura (ignora diferença de maiúscula/minúscula)
                     const outcome = data.outcome ? data.outcome.toString().toUpperCase().trim() : null;
                     
                     if (outcome === 'WIN') {
@@ -243,7 +314,6 @@
                         total_fechados++;
                     }
 
-                    // Tabela
                     const row = document.createElement('tr');
                     const date = new Date(data.timestamp);
                     const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -278,7 +348,6 @@
                     const alvoStr = (data.action === 'ENTRY' && data.takeProfit) ? `$${data.takeProfit.toFixed(0)}` : '-';
                     const stopStr = (data.action === 'ENTRY' && data.stopLoss) ? `$${data.stopLoss.toFixed(0)}` : '-';
 
-                    // Atualiza o "Último"
                     if (total_geral === 1) {
                         const elLast = document.getElementById('stat-last');
                         if(outcome === 'WIN' || outcome === 'LOSS') {
@@ -314,7 +383,6 @@
 
                 candleSeries.setMarkers(newMarkers);
                 
-                // Placar
                 document.getElementById('stat-total').innerText = total_fechados;
 
                 if (total_fechados > 0) {
