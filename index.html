@@ -201,7 +201,6 @@
         };
 
         // --- CORREÇÃO DE FUSO HORÁRIO (SINCRONIZA GRÁFICO E TABELA) ---
-        // Calcula a diferença em segundos entre UTC e o horário do seu navegador
         const timezoneOffset = new Date().getTimezoneOffset() * 60;
 
         let db;
@@ -236,14 +235,14 @@
         document.getElementById('pan-left').addEventListener('click', () => {
             const logicalRange = chart.timeScale().getVisibleLogicalRange();
             if (logicalRange) {
-                chart.timeScale().setVisibleLogicalRange({ from: logicalRange.from - 10, to: logicalRange.to - 10 });
+                chart.timeScale().setVisibleLogicalRange({ from: logicalRange.from - 20, to: logicalRange.to - 20 });
             }
         });
 
         document.getElementById('pan-right').addEventListener('click', () => {
             const logicalRange = chart.timeScale().getVisibleLogicalRange();
             if (logicalRange) {
-                chart.timeScale().setVisibleLogicalRange({ from: logicalRange.from + 10, to: logicalRange.to + 10 });
+                chart.timeScale().setVisibleLogicalRange({ from: logicalRange.from + 20, to: logicalRange.to + 20 });
             }
         });
 
@@ -267,12 +266,12 @@
 
         async function loadChartData() {
             try {
-                const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=200');
+                // AQUI ESTÁ A MUDANÇA: limit=2000 (aprox. 33 horas de histórico)
+                const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=2000');
                 const json = await res.json();
                 
-                // APLICA O AJUSTE DE FUSO HORÁRIO NO GRÁFICO (Subtrai o offset)
                 const candles = json.Data.Data.map(d => ({ 
-                    time: d.time - timezoneOffset, 
+                    time: d.time - timezoneOffset, // Ajuste de fuso horário
                     open: d.open, high: d.high, low: d.low, close: d.close 
                 }));
                 
@@ -313,7 +312,6 @@
                     else if (outcome === 'LOSS') { total_fechados++; }
 
                     const row = document.createElement('tr');
-                    // Tabela usa Data REAL (O navegador ajusta automaticamente)
                     const date = new Date(data.timestamp);
                     const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
                     
@@ -363,10 +361,9 @@
                     `;
                     tbody.appendChild(row);
 
-                    // APLICA O AJUSTE DE FUSO HORÁRIO NOS MARCADORES (Setinhas)
                     if (data.action === 'ENTRY') {
                         newMarkers.push({
-                            time: (data.timestamp / 1000) - timezoneOffset,
+                            time: (data.timestamp / 1000) - timezoneOffset, // Ajuste de fuso nos marcadores
                             position: data.direction === 'UP' ? 'belowBar' : 'aboveBar',
                             color: data.direction === 'UP' ? '#2ea043' : '#da3633',
                             shape: data.direction === 'UP' ? 'arrowUp' : 'arrowDown',
