@@ -51,7 +51,7 @@
         /* LAYOUT CONTAINER */
         .container { flex: 1; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
         
-        /* CONTAINER DO GRÁFICO (POSIÇÃO RELATIVA PARA OS BOTÕES FLUTUAREM) */
+        /* CONTAINER DO GRÁFICO */
         #chart-wrapper {
             position: relative;
             width: 100%;
@@ -65,16 +65,16 @@
             width: 100%; 
         }
 
-        /* --- NOVOS BOTÕES DE NAVEGAÇÃO FLUTUANTES --- */
+        /* --- BOTÕES DE NAVEGAÇÃO FLUTUANTES --- */
         #chart-controls {
             position: absolute;
-            bottom: 15px; /* Fica na parte de baixo do gráfico */
+            bottom: 15px; 
             left: 50%;
             transform: translateX(-50%);
             display: flex;
             gap: 15px;
             z-index: 10;
-            background: rgba(13, 17, 23, 0.8); /* Fundo semi-transparente */
+            background: rgba(13, 17, 23, 0.8);
             padding: 8px 15px;
             border-radius: 20px;
             border: 1px solid #30363d;
@@ -200,6 +200,10 @@
             measurementId: "G-WFZVQB3LRN"
         };
 
+        // --- CORREÇÃO DE FUSO HORÁRIO (SINCRONIZA GRÁFICO E TABELA) ---
+        // Calcula a diferença em segundos entre UTC e o horário do seu navegador
+        const timezoneOffset = new Date().getTimezoneOffset() * 60;
+
         let db;
         try {
             const app = initializeApp(firebaseConfig);
@@ -218,7 +222,6 @@
             grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
             rightPriceScale: { borderColor: '#30363d' },
             localization: { locale: 'pt-BR', dateFormat: 'dd/MM/yyyy' },
-            // IMPORTANTE: vertTouchDrag: false permite rolar a página tocando no gráfico
             handleScroll: { mouseWheel: false, pressedMouseMove: false, vertTouchDrag: false, horzTouchDrag: true },
             handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: true }, 
             timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#30363d' }
@@ -229,29 +232,23 @@
         const bbLower = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
         const bbBasis = chart.addLineSeries({ color: 'rgba(210, 153, 34, 0.5)', lineWidth: 1, lineStyle: 2 });
 
-        // --- LÓGICA DOS BOTÕES DE NAVEGAÇÃO ---
+        // Controles de Navegação
         document.getElementById('pan-left').addEventListener('click', () => {
             const logicalRange = chart.timeScale().getVisibleLogicalRange();
             if (logicalRange) {
-                chart.timeScale().setVisibleLogicalRange({
-                    from: logicalRange.from - 10, // Volta 10 candles
-                    to: logicalRange.to - 10
-                });
+                chart.timeScale().setVisibleLogicalRange({ from: logicalRange.from - 10, to: logicalRange.to - 10 });
             }
         });
 
         document.getElementById('pan-right').addEventListener('click', () => {
             const logicalRange = chart.timeScale().getVisibleLogicalRange();
             if (logicalRange) {
-                chart.timeScale().setVisibleLogicalRange({
-                    from: logicalRange.from + 10, // Avança 10 candles
-                    to: logicalRange.to + 10
-                });
+                chart.timeScale().setVisibleLogicalRange({ from: logicalRange.from + 10, to: logicalRange.to + 10 });
             }
         });
 
         document.getElementById('btn-reset').addEventListener('click', () => {
-            chart.timeScale().scrollToRealTime(); // Vai para o candle atual
+            chart.timeScale().scrollToRealTime(); 
         });
 
         function calculateBB(data, period = 20, stdDev = 2) {
@@ -272,7 +269,13 @@
             try {
                 const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=200');
                 const json = await res.json();
-                const candles = json.Data.Data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
+                
+                // APLICA O AJUSTE DE FUSO HORÁRIO NO GRÁFICO (Subtrai o offset)
+                const candles = json.Data.Data.map(d => ({ 
+                    time: d.time - timezoneOffset, 
+                    open: d.open, high: d.high, low: d.low, close: d.close 
+                }));
+                
                 candleSeries.setData(candles);
                 const bbData = calculateBB(candles);
                 const validBB = bbData.filter(d => d.upper);
@@ -304,17 +307,13 @@
                     if (data.action !== 'ENTRY' && data.action !== 'EXIT') return; 
 
                     total_geral++;
-
                     const outcome = data.outcome ? data.outcome.toString().toUpperCase().trim() : null;
                     
-                    if (outcome === 'WIN') {
-                        wins++;
-                        total_fechados++;
-                    } else if (outcome === 'LOSS') {
-                        total_fechados++;
-                    }
+                    if (outcome === 'WIN') { wins++; total_fechados++; } 
+                    else if (outcome === 'LOSS') { total_fechados++; }
 
                     const row = document.createElement('tr');
+                    // Tabela usa Data REAL (O navegador ajusta automaticamente)
                     const date = new Date(data.timestamp);
                     const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
                     
@@ -327,12 +326,8 @@
 
                     let resultado = '-';
                     const profit = data.profit_pct ? parseFloat(data.profit_pct) : 0;
-
-                    if (outcome === 'WIN') { 
-                        resultado = `<span class="badge bg-green">+${profit.toFixed(2)}%</span>`; 
-                    } else if (outcome === 'LOSS') { 
-                        resultado = `<span class="badge bg-red">${profit.toFixed(2)}%</span>`; 
-                    }
+                    if (outcome === 'WIN') { resultado = `<span class="badge bg-green">+${profit.toFixed(2)}%</span>`; } 
+                    else if (outcome === 'LOSS') { resultado = `<span class="badge bg-red">${profit.toFixed(2)}%</span>`; }
                     
                     let validadeBadge = '-';
                     if (data.action === 'ENTRY') {
@@ -340,9 +335,7 @@
                         if (diffMinutes < 5) validadeBadge = `<span class="badge bg-green">⚡ IDEAL (${Math.floor(diffMinutes)}m)</span>`;
                         else if (diffMinutes < 15) validadeBadge = `<span class="badge bg-yellow">⚠️ ATRASADO (${Math.floor(diffMinutes)}m)</span>`;
                         else validadeBadge = `<span class="badge bg-gray">❌ EXPIRADO</span>`;
-                    } else {
-                        validadeBadge = `<span class="badge bg-gray">FECHADO</span>`;
-                    }
+                    } else { validadeBadge = `<span class="badge bg-gray">FECHADO</span>`; }
 
                     const entryPriceStr = data.entryPrice ? `$${data.entryPrice.toFixed(0)}` : '-';
                     const alvoStr = (data.action === 'ENTRY' && data.takeProfit) ? `$${data.takeProfit.toFixed(0)}` : '-';
@@ -370,9 +363,10 @@
                     `;
                     tbody.appendChild(row);
 
+                    // APLICA O AJUSTE DE FUSO HORÁRIO NOS MARCADORES (Setinhas)
                     if (data.action === 'ENTRY') {
                         newMarkers.push({
-                            time: data.timestamp / 1000,
+                            time: (data.timestamp / 1000) - timezoneOffset,
                             position: data.direction === 'UP' ? 'belowBar' : 'aboveBar',
                             color: data.direction === 'UP' ? '#2ea043' : '#da3633',
                             shape: data.direction === 'UP' ? 'arrowUp' : 'arrowDown',
@@ -382,7 +376,6 @@
                 });
 
                 candleSeries.setMarkers(newMarkers);
-                
                 document.getElementById('stat-total').innerText = total_fechados;
 
                 if (total_fechados > 0) {
@@ -395,9 +388,7 @@
                     document.getElementById('stat-winrate').className = 'stat-val';
                 }
 
-            } catch (e) {
-                console.error("Erro ao carregar histórico:", e);
-            }
+            } catch (e) { console.error("Erro ao carregar histórico:", e); }
         }
 
         async function start() { await loadChartData(); await loadHistory(); }
