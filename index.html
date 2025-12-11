@@ -65,7 +65,7 @@
             width: 100%; 
         }
 
-        /* --- ESTILOS DO NOVO "TERMÔMETRO" --- */
+        /* --- ESTILOS DO TERMÔMETRO --- */
         #market-status {
             padding: 10px 15px;
             background: #161b22;
@@ -241,6 +241,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
+        // CONFIGURAÇÃO DO FIREBASE (Igual ao anterior)
         const firebaseConfig = {
             apiKey: "AIzaSyAegLQL6VMHwDKeG0yvi5AjhlmcgNHCPN4",
             authDomain: "bitcoin-tracker-4d96c.firebaseapp.com",
@@ -250,8 +251,6 @@
             appId: "1:821670432068:web:92af69c44d92741c155b11",
             measurementId: "G-WFZVQB3LRN"
         };
-
-        const timezoneOffset = new Date().getTimezoneOffset() * 60;
 
         let db;
         try {
@@ -273,7 +272,13 @@
             localization: { locale: 'pt-BR', dateFormat: 'dd/MM/yyyy' },
             handleScroll: { mouseWheel: false, pressedMouseMove: false, vertTouchDrag: false, horzTouchDrag: true },
             handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: true }, 
-            timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#30363d' }
+            timeScale: { 
+                timeVisible: true, 
+                secondsVisible: false, 
+                borderColor: '#30363d',
+                // Correção: Deixar o gráfico lidar com UTC automaticamente evita desencontros
+                rightOffset: 5 
+            }
         });
 
         const candleSeries = chart.addCandlestickSeries({ upColor: '#2ea043', downColor: '#da3633', borderVisible: false, wickUpColor: '#2ea043', wickDownColor: '#da3633' });
@@ -314,7 +319,7 @@
             return result;
         }
 
-        // --- NOVA FUNÇÃO PARA ATUALIZAR O TERMÔMETRO ---
+        // --- ATUALIZAÇÃO DO TERMÔMETRO ---
         function updateMarketStatus(currentPrice, bbUpper, bbLower, bbBasis) {
             const range = bbUpper - bbLower;
             const distanceToUpper = bbUpper - currentPrice;
@@ -322,53 +327,45 @@
             const fillElement = document.getElementById('status-bar-fill');
             const textElement = document.getElementById('status-bar-text');
 
+            if (range === 0) return;
+
             // 1. Calcula Posição
             let position = (currentPrice - bbLower) / range;
-            position = Math.max(0, Math.min(1, position)); // Garante que esteja entre 0 e 1
-
-            // 2. Define o Alvo (Centro)
-            let centerPos = (bbBasis - bbLower) / range;
-            centerPos = Math.max(0, Math.min(1, centerPos));
+            position = Math.max(0, Math.min(1, position));
 
             let statusText = "MERCADO NEUTRO";
             let color = "#2ea043"; // Verde (Neutro)
             let width = position * 100;
 
-            const isNearUpper = distanceToUpper / range < 0.2; // 20% do range
-            const isNearLower = distanceToLower / range < 0.2; // 20% do range
+            const isNearUpper = distanceToUpper / range < 0.2; 
+            const isNearLower = distanceToLower / range < 0.2; 
 
             if (isNearUpper) {
-                // Preço perto da banda superior (Alerta Venda)
-                statusText = `🔴 ALERTA VENDA: ${distanceToUpper.toFixed(0)} USD p/ Banda Superior`;
-                color = "#da3633"; // Vermelho
+                statusText = `🔴 ALERTA VENDA: Perto da Banda Superior`;
+                color = "#da3633"; 
             } else if (isNearLower) {
-                // Preço perto da banda inferior (Alerta Compra)
-                statusText = `🟢 ALERTA COMPRA: ${distanceToLower.toFixed(0)} USD p/ Banda Inferior`;
-                color = "#238636"; // Verde Escuro
+                statusText = `🟢 ALERTA COMPRA: Perto da Banda Inferior`;
+                color = "#238636"; 
             } else {
-                // Preço no meio (Neutro/Busca pela Média)
-                 statusText = `🟡 NEUTRO: ${Math.abs(currentPrice - bbBasis).toFixed(0)} USD p/ Média Central`;
-                color = "#d29922"; // Amarelo
+                 statusText = `🟡 NEUTRO: ${Math.abs(currentPrice - bbBasis).toFixed(0)} USD p/ Média`;
+                color = "#d29922"; 
             }
 
-            // 3. Atualiza os Elementos
             fillElement.style.width = `${width}%`;
             fillElement.style.backgroundColor = color;
             textElement.innerText = statusText;
-            
-            // Coloca um indicador visual da média central na barra
-            // fillElement.style.boxShadow = `inset 0 0 0 1px #0d1117, inset 0 0 0 3px ${color}`; 
         }
 
         async function loadChartData() {
             try {
-                // AQUI ESTÁ A MUDANÇA: limit=2000 (aprox. 33 horas de histórico)
+                // Removemos o cálculo manual de timezoneOffset para manter consistência com UTC
                 const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=2000');
                 const json = await res.json();
                 const rawData = json.Data.Data;
 
+                // Mapeia usando o tempo RAW (UTC segundos) que a API retorna
                 const candles = rawData.map(d => ({ 
-                    time: d.time - timezoneOffset, 
+                    time: d.time, 
                     open: d.open, high: d.high, low: d.low, close: d.close 
                 }));
                 
@@ -380,15 +377,12 @@
                 bbLower.setData(validBB.map(d => ({ time: d.time, value: d.lower })));
                 bbBasis.setData(validBB.map(d => ({ time: d.time, value: d.basis })));
 
-                // --- ATUALIZAÇÃO DO TERMÔMETRO AQUI ---
+                // Atualiza termômetro
                 if (rawData.length > 20) {
                     const lastCandle = rawData[rawData.length - 1];
                     const lastBB = bbData[bbData.length - 1];
-
                     if (lastBB.upper && lastBB.lower && lastBB.basis) {
                          updateMarketStatus(lastCandle.close, lastBB.upper, lastBB.lower, lastBB.basis);
-                    } else {
-                        document.getElementById('status-bar-text').innerText = "CALCULANDO BB...";
                     }
                 }
 
@@ -441,8 +435,8 @@
                     let validadeBadge = '-';
                     if (data.action === 'ENTRY') {
                         const diffMinutes = (now - data.timestamp) / (1000 * 60);
-                        if (diffMinutes < 5) validadeBadge = `<span class="badge bg-green">⚡ IDEAL (${Math.floor(diffMinutes)}m)</span>`;
-                        else if (diffMinutes < 15) validadeBadge = `<span class="badge bg-yellow">⚠️ ATRASADO (${Math.floor(diffMinutes)}m)</span>`;
+                        if (diffMinutes < 5) validadeBadge = `<span class="badge bg-green">⚡ IDEAL</span>`;
+                        else if (diffMinutes < 15) validadeBadge = `<span class="badge bg-yellow">⚠️ ATRASADO</span>`;
                         else validadeBadge = `<span class="badge bg-gray">❌ EXPIRADO</span>`;
                     } else { validadeBadge = `<span class="badge bg-gray">FECHADO</span>`; }
 
@@ -473,8 +467,9 @@
                     tbody.appendChild(row);
 
                     if (data.action === 'ENTRY') {
+                        // Correção: Usando timestamp UTC direto (sem subtrair timezone) para alinhar com o gráfico
                         newMarkers.push({
-                            time: (data.timestamp / 1000) - timezoneOffset, 
+                            time: (data.timestamp / 1000), 
                             position: data.direction === 'UP' ? 'belowBar' : 'aboveBar',
                             color: data.direction === 'UP' ? '#2ea043' : '#da3633',
                             shape: data.direction === 'UP' ? 'arrowUp' : 'arrowDown',
@@ -502,7 +497,11 @@
         async function start() { await loadChartData(); await loadHistory(); }
         start();
         setInterval(start, 60000); 
-        new ResizeObserver(entries => { if (entries.length === 0) return; const newRect = entries[0].contentRect; chart.applyOptions({ height: newRect.height, width: newRect.width }); }).observe(document.getElementById('chart-container'));
+        new ResizeObserver(entries => { 
+            if (entries.length === 0) return; 
+            const newRect = entries[0].contentRect; 
+            chart.applyOptions({ height: newRect.height, width: newRect.width }); 
+        }).observe(document.getElementById('chart-container'));
     </script>
 </body>
 </html>
