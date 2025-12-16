@@ -24,7 +24,7 @@ EMA_TREND_PERIOD = 200 # Filtro de tendência macro
 
 # CONFIGURAÇÕES DE RISCO E LINK
 STOP_LOSS_PCT = 0.015  # 1.5% de Stop Loss
-SITE_URL = 'https://xandylima1996.github.io/bot-bitcoin/' # Mude para seu domínio novo depois
+SITE_URL = 'https://xandylima1996.github.io/bot-bitcoin/' # Atualize se tiver comprado o domínio
 
 # --- Environment Variables ---
 FIREBASE_CREDS_JSON = os.environ.get('FIREBASE_CREDENTIALS')
@@ -50,7 +50,7 @@ def send_telegram_message(message):
         print("Telegram credentials not set.")
         return
 
-    # Teclado com botão para o site/checkout
+    # Teclado com botão
     keyboard = {
         "inline_keyboard": [[
             {"text": "📊 Ver Gráfico / Assinar VIP", "url": SITE_URL}
@@ -110,7 +110,7 @@ def analyze_and_act():
     # EMA 200 (Filtro de Tendência)
     df['ema_trend'] = ta.ema(df['close'], length=EMA_TREND_PERIOD)
 
-    # Nomes das colunas do BB e ADX (variam conforme a lib)
+    # Nomes das colunas
     bbl_col = bb.columns[0] # Lower
     bbm_col = bb.columns[1] # Middle
     bbu_col = bb.columns[2] # Upper
@@ -127,8 +127,9 @@ def analyze_and_act():
     current_adx = last_row[adx_col]
     ema_trend = last_row['ema_trend']
 
+    # Fallback se EMA ainda for NaN
     if pd.isna(ema_trend):
-        ema_trend = current_price # Fallback
+        ema_trend = current_price 
 
     print(f"Preço: {current_price:.2f} | RSI: {rsi:.2f} | ADX: {current_adx:.2f}")
     print(f"EMA 200: {ema_trend:.2f} (Tendência: {'ALTA' if current_price > ema_trend else 'BAIXA'})")
@@ -265,9 +266,8 @@ def analyze_and_act():
     else:
         print("Nenhuma ação necessária.")
 
-# --- MUDANÇA CRÍTICA AQUI EMBAIXO: REMOVIDO O LOOP WHILE ---
 if __name__ == "__main__":
-    print(f"🤖 Bot iniciado em modo Cron Job: {datetime.now()}")
+    print(f"🤖 Bot iniciado em modo Cron Job (Sem Loop): {datetime.now()}")
     
     # Executa a análise UMA VEZ e encerra
     try:
@@ -276,4 +276,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Erro fatal na execução: {e}")
     
-    print("Desligando bot para aguardar o próximo agendamento...")
+    print("Encerrando execução para liberar GitHub Actions.")
