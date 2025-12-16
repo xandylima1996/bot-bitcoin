@@ -17,7 +17,7 @@ RSI_PERIOD = 14
 BB_PERIOD = 20
 BB_STD = 2
 
-# NOVAS CONFIGURAÇÕES (FILTROS)
+# NOVAS CONFIGURAÇÕES (FILTROS SNIPER)
 ADX_PERIOD = 14
 ADX_THRESHOLD = 32     # Acima disso, mercado está perigoso (não opera)
 EMA_TREND_PERIOD = 200 # Filtro de tendência macro
@@ -27,7 +27,6 @@ STOP_LOSS_PCT = 0.015  # 1.5% de Stop Loss
 SITE_URL = 'https://xandylima1996.github.io/bot-bitcoin/' # Mude para seu domínio novo depois
 
 # --- Environment Variables ---
-# Certifique-se de que essas variáveis existem no seu ambiente (Github Secrets ou .env)
 FIREBASE_CREDS_JSON = os.environ.get('FIREBASE_CREDENTIALS')
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
@@ -62,7 +61,7 @@ def send_telegram_message(message):
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
-        "parse_mode": "HTML", # Mudado para HTML para evitar erros com caracteres especiais
+        "parse_mode": "HTML", 
         "reply_markup": json.dumps(keyboard)
     }
     try:
@@ -128,9 +127,8 @@ def analyze_and_act():
     current_adx = last_row[adx_col]
     ema_trend = last_row['ema_trend']
 
-    # Verificação de segurança se EMA ainda for NaN (primeiras execuções)
     if pd.isna(ema_trend):
-        ema_trend = current_price # Fallback para não quebrar, mas ideal é ter histórico
+        ema_trend = current_price # Fallback
 
     print(f"Preço: {current_price:.2f} | RSI: {rsi:.2f} | ADX: {current_adx:.2f}")
     print(f"EMA 200: {ema_trend:.2f} (Tendência: {'ALTA' if current_price > ema_trend else 'BAIXA'})")
@@ -166,7 +164,6 @@ def analyze_and_act():
             # 2. LÓGICA DE SINAL COM FILTRO DE TENDÊNCIA (EMA 200)
             
             # SINAL DE COMPRA (LONG)
-            # Regra: Só compra se preço estiver Caindo (RSI baixo) MAS a tendência macro for ALTA (Acima da EMA 200)
             if rsi < 35 and current_price <= bb_lower * 1.005:
                 if current_price > ema_trend:
                     new_signal = 'UP'
@@ -178,7 +175,6 @@ def analyze_and_act():
                     print("Sinal de COMPRA ignorado: Preço abaixo da EMA 200 (Contra tendência).")
 
             # SINAL DE VENDA (SHORT)
-            # Regra: Só vende se preço estiver Subindo (RSI alto) MAS a tendência macro for BAIXA (Abaixo da EMA 200)
             elif rsi > 65 and current_price >= bb_upper * 0.995:
                 if current_price < ema_trend:
                     new_signal = 'DOWN'
@@ -189,7 +185,7 @@ def analyze_and_act():
                 else:
                      print("Sinal de VENDA ignorado: Preço acima da EMA 200 (Contra tendência).")
 
-    # --- LÓGICA DE SAÍDA (IGUAL AO ANTERIOR) ---
+    # --- LÓGICA DE SAÍDA ---
     elif last_action == 'ENTRY':
         is_stop_loss = False
         if current_direction == 'UP':
@@ -239,17 +235,14 @@ def analyze_and_act():
                 'outcome': outcome,
                 'profit_pct': profit_pct,
                 'rsi': float(rsi),
-                'adx': float(current_adx), # Salvando ADX para analise futura
+                'adx': float(current_adx), 
                 'source': 'bot_v2_sniper'
             }
             
             collection.add(doc_data)
             
-            # Formatação da Mensagem
             emoji = "🚀" if new_action == 'ENTRY' else ("💰" if outcome == 'WIN' else "🛑")
             titulo = "ENTRADA CONFIRMADA" if new_action == 'ENTRY' else ("LUCRO REALIZADO" if outcome == 'WIN' else "STOP LOSS")
-            
-            # Limpeza de strings para HTML
             reason_safe = reason.replace('<', '&lt;').replace('>', '&gt;')
             
             msg = (
@@ -272,18 +265,15 @@ def analyze_and_act():
     else:
         print("Nenhuma ação necessária.")
 
+# --- MUDANÇA CRÍTICA AQUI EMBAIXO: REMOVIDO O LOOP WHILE ---
 if __name__ == "__main__":
-    print("🤖 Bot Bitcoin V2 (Sniper Mode) Iniciado...")
-    print("Pressione Ctrl+C para parar.")
+    print(f"🤖 Bot iniciado em modo Cron Job: {datetime.now()}")
     
-    while True:
-        try:
-            analyze_and_act()
-            # Intervalo de verificação (60 segundos)
-            time.sleep(60)
-        except KeyboardInterrupt:
-            print("Bot parado pelo usuário.")
-            break
-        except Exception as e:
-            print(f"Erro no loop principal: {e}")
-            time.sleep(60)
+    # Executa a análise UMA VEZ e encerra
+    try:
+        analyze_and_act()
+        print("Análise concluída com sucesso.")
+    except Exception as e:
+        print(f"Erro fatal na execução: {e}")
+    
+    print("Desligando bot para aguardar o próximo agendamento...")
