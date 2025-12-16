@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import ccxt
 import pandas as pd
 import pandas_ta as ta
@@ -16,11 +17,17 @@ RSI_PERIOD = 14
 BB_PERIOD = 20
 BB_STD = 2
 
+# NOVAS CONFIGURAÇÕES (FILTROS)
+ADX_PERIOD = 14
+ADX_THRESHOLD = 32     # Acima disso, mercado está perigoso (não opera)
+EMA_TREND_PERIOD = 200 # Filtro de tendência macro
+
 # CONFIGURAÇÕES DE RISCO E LINK
 STOP_LOSS_PCT = 0.015  # 1.5% de Stop Loss
-SITE_URL = 'https://xandylima1996.github.io/bot-bitcoin/' # SEU LINK
+SITE_URL = 'https://xandylima1996.github.io/bot-bitcoin/' # Mude para seu domínio novo depois
 
 # --- Environment Variables ---
+# Certifique-se de que essas variáveis existem no seu ambiente (Github Secrets ou .env)
 FIREBASE_CREDS_JSON = os.environ.get('FIREBASE_CREDENTIALS')
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
@@ -28,13 +35,15 @@ TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 def init_firebase():
     if not firebase_admin._apps:
         if not FIREBASE_CREDS_JSON:
-            raise ValueError("FIREBASE_CREDENTIALS environment variable not set.")
+            print("ERRO CRÍTICO: FIREBASE_CREDENTIALS não encontrado.")
+            return None
         try:
             creds_dict = json.loads(FIREBASE_CREDS_JSON)
             cred = credentials.Certificate(creds_dict)
             firebase_admin.initialize_app(cred)
         except Exception as e:
-            raise ValueError(f"Error initializing Firebase: {e}")
+            print(f"Erro ao inicializar Firebase: {e}")
+            return None
     return firestore.client()
 
 def send_telegram_message(message):
@@ -42,9 +51,10 @@ def send_telegram_message(message):
         print("Telegram credentials not set.")
         return
 
+    # Teclado com botão para o site/checkout
     keyboard = {
         "inline_keyboard": [[
-            {"text": "📊 Ver Gráfico e Tabela", "url": SITE_URL}
+            {"text": "📊 Ver Gráfico / Assinar VIP", "url": SITE_URL}
         ]]
     }
 
@@ -52,12 +62,11 @@ def send_telegram_message(message):
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
-        "parse_mode": "Markdown", # Markdown simples (suporta *bold*, mas odeia _)
+        "parse_mode": "HTML", # Mudado para HTML para evitar erros com caracteres especiais
         "reply_markup": json.dumps(keyboard)
     }
     try:
         response = requests.post(url, data=payload)
-        # Se der erro no envio (ex: formatação), mostramos no log
         if response.status_code != 200:
             print(f"Erro Telegram API: {response.text}")
     except Exception as e:
@@ -65,12 +74,14 @@ def send_telegram_message(message):
 
 def get_data():
     exchange = ccxt.kraken()
-    bars = exchange.fetch_ohlcv(SYMBOL, timeframe=TIMEFRAME, limit=100)
+    # AUMENTADO PARA 300 (Necessário para calcular a EMA 200 com precisão)
+    bars = exchange.fetch_ohlcv(SYMBOL, timeframe=TIMEFRAME, limit=300)
     df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     return df
 
 def get_last_position(db):
+    if db is None: return None
     try:
         docs = db.collection('historico_bitcoin').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(1).stream()
         for doc in docs:
@@ -80,7 +91,7 @@ def get_last_position(db):
     return None
 
 def analyze_and_act():
-    print(f"Starting analysis for {SYMBOL} at {datetime.now()}...")
+    print(f"--- Iniciando análise {datetime.now().strftime('%H:%M:%S')} ---")
     
     try:
         df = get_data()
@@ -88,36 +99,55 @@ def analyze_and_act():
         print(f"Error fetching data: {e}")
         return
 
+    # 1. Cálculos de Indicadores
     df['rsi'] = ta.rsi(df['close'], length=RSI_PERIOD)
     bb = ta.bbands(df['close'], length=BB_PERIOD, std=BB_STD)
+    df = pd.concat([df, bb], axis=1)
     
+    # ADX (Filtro de Força)
+    adx_df = ta.adx(df['high'], df['low'], df['close'], length=ADX_PERIOD)
+    df = pd.concat([df, adx_df], axis=1)
+
+    # EMA 200 (Filtro de Tendência)
+    df['ema_trend'] = ta.ema(df['close'], length=EMA_TREND_PERIOD)
+
+    # Nomes das colunas do BB e ADX (variam conforme a lib)
     bbl_col = bb.columns[0] # Lower
     bbm_col = bb.columns[1] # Middle
     bbu_col = bb.columns[2] # Upper
+    adx_col = f"ADX_{ADX_PERIOD}" # Geralmente 'ADX_14'
 
-    df = pd.concat([df, bb], axis=1)
-
+    # Pegando a última linha (Vela Fechada ou Atual)
     last_row = df.iloc[-1]
+    
     current_price = last_row['close']
     rsi = last_row['rsi']
     bb_lower = last_row[bbl_col]
     bb_middle = last_row[bbm_col]
     bb_upper = last_row[bbu_col]
-    
-    print(f"Price: {current_price:.2f} | RSI: {rsi:.2f}")
+    current_adx = last_row[adx_col]
+    ema_trend = last_row['ema_trend']
+
+    # Verificação de segurança se EMA ainda for NaN (primeiras execuções)
+    if pd.isna(ema_trend):
+        ema_trend = current_price # Fallback para não quebrar, mas ideal é ter histórico
+
+    print(f"Preço: {current_price:.2f} | RSI: {rsi:.2f} | ADX: {current_adx:.2f}")
+    print(f"EMA 200: {ema_trend:.2f} (Tendência: {'ALTA' if current_price > ema_trend else 'BAIXA'})")
 
     db = init_firebase()
     last_order = get_last_position(db)
     
     last_action = 'EXIT' 
     entry_price = 0
+    current_direction = None
+
     if last_order:
         last_action = last_order.get('action', 'EXIT')
         entry_price = last_order.get('entryPrice', 0)
+        current_direction = last_order.get('direction')
         if 'action' not in last_order and 'direction' in last_order:
              last_action = 'ENTRY'
-
-    current_direction = last_order.get('direction') if last_order else None
 
     new_signal = None
     new_action = None 
@@ -127,24 +157,40 @@ def analyze_and_act():
 
     # --- LÓGICA DE ENTRADA ---
     if last_action == 'EXIT' or last_action is None:
-        if rsi < 35 and current_price <= bb_lower * 1.005:
-            new_signal = 'UP'
-            new_action = 'ENTRY'
-            reason = "RSI Baixo + Banda Inferior"
-            stop_val = current_price * (1 - STOP_LOSS_PCT)
-            target_val = bb_middle
-            
-        elif rsi > 65 and current_price >= bb_upper * 0.995:
-            new_signal = 'DOWN'
-            new_action = 'ENTRY'
-            reason = "RSI Alto + Banda Superior"
-            stop_val = current_price * (1 + STOP_LOSS_PCT)
-            target_val = bb_middle
-
-    # --- LÓGICA DE SAÍDA (LUCRO + STOP LOSS) ---
-    elif last_action == 'ENTRY':
         
-        # 1. STOP LOSS
+        # 1. FILTRO DE VOLATILIDADE (ADX)
+        if current_adx > ADX_THRESHOLD:
+            print(f"⚠️ MERCADO PERIGOSO (ADX {current_adx:.1f} > {ADX_THRESHOLD}). Aguardando calmaria.")
+        
+        else:
+            # 2. LÓGICA DE SINAL COM FILTRO DE TENDÊNCIA (EMA 200)
+            
+            # SINAL DE COMPRA (LONG)
+            # Regra: Só compra se preço estiver Caindo (RSI baixo) MAS a tendência macro for ALTA (Acima da EMA 200)
+            if rsi < 35 and current_price <= bb_lower * 1.005:
+                if current_price > ema_trend:
+                    new_signal = 'UP'
+                    new_action = 'ENTRY'
+                    reason = "Pullback em Tendência de Alta (RSI Baixo + Acima EMA200)"
+                    stop_val = current_price * (1 - STOP_LOSS_PCT)
+                    target_val = bb_middle
+                else:
+                    print("Sinal de COMPRA ignorado: Preço abaixo da EMA 200 (Contra tendência).")
+
+            # SINAL DE VENDA (SHORT)
+            # Regra: Só vende se preço estiver Subindo (RSI alto) MAS a tendência macro for BAIXA (Abaixo da EMA 200)
+            elif rsi > 65 and current_price >= bb_upper * 0.995:
+                if current_price < ema_trend:
+                    new_signal = 'DOWN'
+                    new_action = 'ENTRY'
+                    reason = "Repique em Tendência de Baixa (RSI Alto + Abaixo EMA200)"
+                    stop_val = current_price * (1 + STOP_LOSS_PCT)
+                    target_val = bb_middle
+                else:
+                     print("Sinal de VENDA ignorado: Preço acima da EMA 200 (Contra tendência).")
+
+    # --- LÓGICA DE SAÍDA (IGUAL AO ANTERIOR) ---
+    elif last_action == 'ENTRY':
         is_stop_loss = False
         if current_direction == 'UP':
             if current_price <= entry_price * (1 - STOP_LOSS_PCT): is_stop_loss = True
@@ -154,9 +200,8 @@ def analyze_and_act():
         if is_stop_loss:
             new_signal = 'STOP_LOSS'
             new_action = 'EXIT'
-            reason = f"Preço atingiu limite de perda ({STOP_LOSS_PCT*100}%)"
+            reason = f"Stop Loss atingido ({STOP_LOSS_PCT*100}%)"
 
-        # 2. TAKE PROFIT
         elif current_direction == 'UP':
             if current_price >= bb_middle:
                 new_signal = 'TAKE_PROFIT'
@@ -168,55 +213,77 @@ def analyze_and_act():
                 new_action = 'EXIT'
                 reason = "Alvo atingido (Média Central)"
 
-    # --- EXECUÇÃO ---
+    # --- EXECUÇÃO E ENVIO ---
     if new_signal:
-        print(f"NOVO SINAL: {new_signal}")
-        collection = db.collection('historico_bitcoin')
+        print(f"!!! NOVO SINAL DETECTADO: {new_signal} !!!")
         
-        outcome = "PENDING"
-        profit_pct = 0
-        
-        if new_action == 'EXIT':
-            profit_pct = ((current_price - entry_price) / entry_price) * 100
-            if current_direction == 'DOWN': profit_pct *= -1
-            outcome = "WIN" if profit_pct > 0 else "LOSS"
+        if db:
+            collection = db.collection('historico_bitcoin')
+            
+            outcome = "PENDING"
+            profit_pct = 0
+            
+            if new_action == 'EXIT':
+                profit_pct = ((current_price - entry_price) / entry_price) * 100
+                if current_direction == 'DOWN': profit_pct *= -1
+                outcome = "WIN" if profit_pct > 0 else "LOSS"
 
-        doc_data = {
-            'timestamp': int(last_row['timestamp'].timestamp() * 1000),
-            'entryPrice': float(current_price),
-            'direction': 'UP' if new_signal == 'UP' else ('DOWN' if new_signal == 'DOWN' else current_direction),
-            'action': new_action,
-            'signal_type': new_signal,
-            'stopLoss': float(stop_val) if new_action == 'ENTRY' else 0,
-            'takeProfit': float(target_val) if new_action == 'ENTRY' else 0,
-            'outcome': outcome,
-            'profit_pct': profit_pct,
-            'rsi': float(rsi),
-            'source': 'bot'
-        }
-        
-        collection.add(doc_data)
-        
-        emoji = "🚀" if new_action == 'ENTRY' else ("💰" if outcome == 'WIN' else "🛑")
-        titulo = "ENTRADA" if new_action == 'ENTRY' else ("LUCRO" if outcome == 'WIN' else "STOP LOSS")
-        
-        # CORREÇÃO CRÍTICA: Remove o sublinhado (_) do nome do sinal para não quebrar o Telegram
-        sinal_limpo = new_signal.replace('_', ' ') 
+            doc_data = {
+                'timestamp': int(last_row['timestamp'].timestamp() * 1000),
+                'entryPrice': float(current_price),
+                'direction': 'UP' if new_signal == 'UP' else ('DOWN' if new_signal == 'DOWN' else current_direction),
+                'action': new_action,
+                'signal_type': new_signal,
+                'stopLoss': float(stop_val) if new_action == 'ENTRY' else 0,
+                'takeProfit': float(target_val) if new_action == 'ENTRY' else 0,
+                'outcome': outcome,
+                'profit_pct': profit_pct,
+                'rsi': float(rsi),
+                'adx': float(current_adx), # Salvando ADX para analise futura
+                'source': 'bot_v2_sniper'
+            }
+            
+            collection.add(doc_data)
+            
+            # Formatação da Mensagem
+            emoji = "🚀" if new_action == 'ENTRY' else ("💰" if outcome == 'WIN' else "🛑")
+            titulo = "ENTRADA CONFIRMADA" if new_action == 'ENTRY' else ("LUCRO REALIZADO" if outcome == 'WIN' else "STOP LOSS")
+            
+            # Limpeza de strings para HTML
+            reason_safe = reason.replace('<', '&lt;').replace('>', '&gt;')
+            
+            msg = (
+                f"{emoji} <b>SINAL: {titulo}</b> {emoji}\n\n"
+                f"📢 <b>Tipo</b>: {new_signal.replace('_', ' ')}\n"
+                f"📝 <b>Motivo</b>: {reason_safe}\n"
+                f"💵 <b>Preço</b>: ${current_price:,.2f}\n"
+            )
+            
+            if new_action == 'ENTRY':
+                 msg += f"📉 <b>Stop Loss</b>: ${stop_val:,.2f}\n"
+                 msg += f"🎯 <b>Alvo</b>: ${target_val:,.2f}\n"
 
-        msg = (
-            f"{emoji} *SINAL: {titulo}* {emoji}\n\n"
-            f"📢 *Tipo*: {sinal_limpo}\n"
-            f"📝 *Motivo*: {reason}\n"
-            f"💵 *Preço*: ${current_price:,.2f}\n"
-        )
-        if new_action == 'EXIT':
-             msg += f"📊 *Resultado*: {profit_pct:.2f}% ({outcome})\n"
+            if new_action == 'EXIT':
+                 msg += f"📊 <b>Resultado</b>: {profit_pct:.2f}% ({outcome})\n"
 
-        msg += f"⏳ *Hora*: {datetime.now().strftime('%H:%M:%S')}"
-        
-        send_telegram_message(msg)
+            msg += f"⏳ <b>Hora</b>: {datetime.now().strftime('%H:%M:%S')}"
+            
+            send_telegram_message(msg)
     else:
-        print("Mantendo posição ou aguardando oportunidade.")
+        print("Nenhuma ação necessária.")
 
 if __name__ == "__main__":
-    analyze_and_act()
+    print("🤖 Bot Bitcoin V2 (Sniper Mode) Iniciado...")
+    print("Pressione Ctrl+C para parar.")
+    
+    while True:
+        try:
+            analyze_and_act()
+            # Intervalo de verificação (60 segundos)
+            time.sleep(60)
+        except KeyboardInterrupt:
+            print("Bot parado pelo usuário.")
+            break
+        except Exception as e:
+            print(f"Erro no loop principal: {e}")
+            time.sleep(60)
