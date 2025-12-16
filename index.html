@@ -3,176 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Painel Bitcoin Bot</title>
+    <title>Painel Bitcoin Bot VIP</title>
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
-        /* AJUSTE MOBILE: 100dvh e travamento de zoom indesejado */
+        /* AJUSTE MOBILE */
         body { 
             background-color: #0d1117; 
             color: #c9d1d9; 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            margin: 0; 
-            padding: 0; 
-            display: flex; 
-            flex-direction: column; 
-            height: 100vh; 
-            height: 100dvh; 
+            margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; 
         }
         
         /* HEADER */
         header { 
-            padding: 15px 20px; 
-            background: #161b22; 
-            border-bottom: 1px solid #30363d; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            gap: 10px;
-            flex-shrink: 0; 
+            padding: 15px 20px; background: #161b22; border-bottom: 1px solid #30363d; 
+            display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-shrink: 0; 
         }
         h1 { margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
         
         /* BOTÃO CALCULADORA */
         .btn-calc {
-            background: #238636;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-size: 0.85rem;
-            font-weight: bold;
-            border: 1px solid rgba(240,246,252,0.1);
-            display: flex;
-            align-items: center;
-            gap: 5px;
+            background: #238636; color: white; padding: 6px 12px; border-radius: 6px;
+            text-decoration: none; font-size: 0.85rem; font-weight: bold; border: 1px solid rgba(240,246,252,0.1);
         }
-        .btn-calc:hover { background: #2ea043; }
-
-        /* LAYOUT CONTAINER */
         .container { flex: 1; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
         
-        /* CONTAINER DO GRÁFICO */
-        #chart-wrapper {
-            position: relative;
-            width: 100%;
-            height: 400px;
-            border-bottom: 1px solid #30363d;
-            flex-shrink: 0;
-        }
+        /* GRÁFICO */
+        #chart-wrapper { position: relative; width: 100%; height: 400px; border-bottom: 1px solid #30363d; flex-shrink: 0; }
+        #chart-container { height: 100%; width: 100%; }
 
-        #chart-container { 
-            height: 100%; 
-            width: 100%; 
-        }
+        /* TERMÔMETRO */
+        #market-status { padding: 10px 15px; background: #161b22; border-bottom: 1px solid #30363d; flex-shrink: 0; }
+        .status-title { font-size: 0.85rem; color: #8b949e; margin-bottom: 8px; font-weight: bold; }
+        #status-bar-container { width: 100%; height: 15px; background-color: #30363d; border-radius: 8px; overflow: hidden; position: relative; }
+        #status-bar-fill { height: 100%; width: 50%; background-color: #2ea043; transition: width 0.5s; border-radius: 8px; }
+        #status-bar-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold; color: #fff; text-shadow: 1px 1px 2px #000; }
 
-        /* --- ESTILOS DO TERMÔMETRO --- */
-        #market-status {
-            padding: 10px 15px;
-            background: #161b22;
-            border-bottom: 1px solid #30363d;
-            flex-shrink: 0;
-        }
-        .status-title {
-            font-size: 0.85rem;
-            color: #8b949e;
-            margin-bottom: 8px;
-            font-weight: bold;
-        }
-        #status-bar-container {
-            width: 100%;
-            height: 15px;
-            background-color: #30363d;
-            border-radius: 8px;
-            overflow: hidden;
-            position: relative;
-        }
-        #status-bar-fill {
-            height: 100%;
-            width: 50%; /* Posição inicial */
-            background-color: #2ea043;
-            transition: width 0.5s ease-out, background-color 0.5s ease-out;
-            border-radius: 8px;
-        }
-        #status-bar-text {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
-            font-weight: bold;
-            color: #ffffff;
-            text-shadow: 1px 1px 2px #00000050;
-        }
+        /* CONTROLES */
+        #chart-controls { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 10; background: rgba(13, 17, 23, 0.8); padding: 8px 15px; border-radius: 20px; border: 1px solid #30363d; backdrop-filter: blur(4px); }
+        .nav-btn { background: none; border: none; color: #c9d1d9; font-size: 1.2rem; cursor: pointer; }
+        #btn-reset { font-size: 0.75rem; font-weight: bold; color: #2ea043; border: 1px solid #238636; padding: 4px 10px; border-radius: 12px; background: rgba(35, 134, 54, 0.1); }
 
-        /* --- BOTÕES DE NAVEGAÇÃO FLUTUANTES --- */
-        #chart-controls {
-            position: absolute;
-            bottom: 15px; 
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 15px;
-            z-index: 10;
-            background: rgba(13, 17, 23, 0.8);
-            padding: 8px 15px;
-            border-radius: 20px;
-            border: 1px solid #30363d;
-            backdrop-filter: blur(4px);
-        }
-
-        .nav-btn {
-            background: none;
-            border: none;
-            color: #c9d1d9;
-            font-size: 1.2rem;
-            cursor: pointer;
-            padding: 0 5px;
-            display: flex;
-            align-items: center;
-        }
-        
-        .nav-btn:active { transform: scale(0.9); color: #58a6ff; }
-
-        #btn-reset {
-            font-size: 0.75rem;
-            font-weight: bold;
-            color: #2ea043;
-            border: 1px solid #238636;
-            padding: 4px 10px;
-            border-radius: 12px;
-            background: rgba(35, 134, 54, 0.1);
-        }
-
-        /* PLACAR (STATS BAR) */
-        #stats-bar { 
-            display: flex; 
-            gap: 20px; 
-            padding: 15px 15px; 
-            background: #0d1117; 
-            border-bottom: 1px solid #30363d; 
-            font-family: monospace; 
-            overflow-x: auto; 
-            flex-shrink: 0; 
-            min-height: 50px; 
-            align-items: center;
-        }
-        
+        /* STATS */
+        #stats-bar { display: flex; gap: 20px; padding: 15px; background: #0d1117; border-bottom: 1px solid #30363d; font-family: monospace; overflow-x: auto; flex-shrink: 0; min-height: 50px; align-items: center; }
         .stat-box { display: flex; flex-direction: column; min-width: 80px; justify-content: center; }
-        .stat-label { font-size: 0.75rem; color: #8b949e; margin-bottom: 4px; }
+        .stat-label { font-size: 0.75rem; color: #8b949e; }
         .stat-val { font-size: 1.1rem; font-weight: bold; }
         .win { color: #2ea043; } .loss { color: #da3633; }
 
         /* TABELA */
         #table-wrapper { padding: 10px; padding-bottom: 50px; }
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        th { text-align: left; color: #8b949e; padding: 8px; border-bottom: 1px solid #30363d; white-space: nowrap; }
-        td { padding: 8px; border-bottom: 1px solid #21262d; vertical-align: middle; white-space: nowrap; }
-        
-        .badge { padding: 3px 6px; border-radius: 4px; font-size: 0.70rem; font-weight: bold; display: inline-block; white-space: nowrap; }
+        th { text-align: left; color: #8b949e; padding: 8px; border-bottom: 1px solid #30363d; }
+        td { padding: 8px; border-bottom: 1px solid #21262d; white-space: nowrap; }
+        .badge { padding: 3px 6px; border-radius: 4px; font-size: 0.70rem; font-weight: bold; display: inline-block; }
         .bg-green { background: rgba(46, 160, 67, 0.2); color: #2ea043; }
         .bg-red { background: rgba(218, 54, 51, 0.2); color: #da3633; }
         .bg-gray { background: rgba(110, 118, 129, 0.2); color: #8b949e; }
@@ -181,32 +65,23 @@
 </head>
 <body>
     <header>
-        <h1>🤖 BTC Bot</h1>
+        <h1>🤖 BTC Sniper VIP</h1>
         <a href="calculadora.html" class="btn-calc">🧮 Calc</a>
     </header>
 
     <div class="container">
         <div id="stats-bar">
-            <div class="stat-box">
-                <span class="stat-label">Taxa Acerto</span>
-                <span class="stat-val" id="stat-winrate">--%</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">Trades</span>
-                <span class="stat-val" id="stat-total">0</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">Último</span>
-                <span class="stat-val" id="stat-last">--</span>
-            </div>
+            <div class="stat-box"><span class="stat-label">Taxa Acerto</span><span class="stat-val" id="stat-winrate">--%</span></div>
+            <div class="stat-box"><span class="stat-label">Trades</span><span class="stat-val" id="stat-total">0</span></div>
+            <div class="stat-box"><span class="stat-label">Último</span><span class="stat-val" id="stat-last">--</span></div>
             <div id="connection-status" style="font-size: 0.7rem; color: #8b949e; align-self: center;">Conectando...</div>
         </div>
 
         <div id="market-status">
-            <div class="status-title" id="market-status-title">STATUS DE MERCADO: </div>
+            <div class="status-title" id="market-status-title">STATUS: </div>
             <div id="status-bar-container">
                 <div id="status-bar-fill"></div>
-                <div id="status-bar-text">CARREGANDO DADOS...</div>
+                <div id="status-bar-text">CARREGANDO...</div>
             </div>
         </div>
 
@@ -222,15 +97,7 @@
         <div id="table-wrapper">
             <table>
                 <thead>
-                    <tr>
-                        <th>Hora</th>
-                        <th>Tipo</th>
-                        <th>Entrada</th>
-                        <th>Alvo (Saída)</th>
-                        <th>Stop Loss</th>
-                        <th>Validade</th>
-                        <th>Resultado</th>
-                    </tr>
+                    <tr><th>Hora</th><th>Tipo</th><th>Entrada</th><th>Alvo</th><th>Stop</th><th>Validade</th><th>Resultado</th></tr>
                 </thead>
                 <tbody id="trade-table"></tbody>
             </table>
@@ -241,7 +108,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-        // CONFIGURAÇÃO DO FIREBASE (Igual ao anterior)
+        // --- FIREBASE CONFIG ---
         const firebaseConfig = {
             apiKey: "AIzaSyAegLQL6VMHwDKeG0yvi5AjhlmcgNHCPN4",
             authDomain: "bitcoin-tracker-4d96c.firebaseapp.com",
@@ -264,47 +131,37 @@
             document.getElementById('connection-status').style.color = "#da3633";
         }
 
-        // --- CONFIGURAÇÃO DO GRÁFICO ---
+        // --- CHART CONFIG ---
         const chart = LightweightCharts.createChart(document.getElementById('chart-container'), { 
             layout: { textColor: '#d1d4dc', background: { type: 'solid', color: '#0d1117' } },
             grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
             rightPriceScale: { borderColor: '#30363d' },
             localization: { locale: 'pt-BR', dateFormat: 'dd/MM/yyyy' },
-            handleScroll: { mouseWheel: false, pressedMouseMove: false, vertTouchDrag: false, horzTouchDrag: true },
-            handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: true }, 
-            timeScale: { 
-                timeVisible: true, 
-                secondsVisible: false, 
-                borderColor: '#30363d',
-                // Correção: Deixar o gráfico lidar com UTC automaticamente evita desencontros
-                rightOffset: 5 
-            }
+            timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#30363d', rightOffset: 5 }
         });
 
         const candleSeries = chart.addCandlestickSeries({ upColor: '#2ea043', downColor: '#da3633', borderVisible: false, wickUpColor: '#2ea043', wickDownColor: '#da3633' });
-        const bbUpper = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
-        const bbLower = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.5)', lineWidth: 1 });
-        const bbBasis = chart.addLineSeries({ color: 'rgba(210, 153, 34, 0.5)', lineWidth: 1, lineStyle: 2 });
+        
+        // Indicadores Visuais
+        const bbUpper = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.3)', lineWidth: 1 });
+        const bbLower = chart.addLineSeries({ color: 'rgba(56, 139, 253, 0.3)', lineWidth: 1 });
+        // Média Central (Bollinger Basis) - Laranja
+        const bbBasis = chart.addLineSeries({ color: 'rgba(210, 153, 34, 0.6)', lineWidth: 1, lineStyle: 2 });
+        // NOVA: EMA 200 (Tendência) - Roxo
+        const emaTrend = chart.addLineSeries({ color: '#A371F7', lineWidth: 2 }); 
 
-        // Controles de Navegação
+        // Navegação
         document.getElementById('pan-left').addEventListener('click', () => {
             const logicalRange = chart.timeScale().getVisibleLogicalRange();
-            if (logicalRange) {
-                chart.timeScale().setVisibleLogicalRange({ from: logicalRange.from - 20, to: logicalRange.to - 20 });
-            }
+            if (logicalRange) chart.timeScale().setVisibleLogicalRange({ from: logicalRange.from - 20, to: logicalRange.to - 20 });
         });
-
         document.getElementById('pan-right').addEventListener('click', () => {
             const logicalRange = chart.timeScale().getVisibleLogicalRange();
-            if (logicalRange) {
-                chart.timeScale().setVisibleLogicalRange({ from: logicalRange.from + 20, to: logicalRange.to + 20 });
-            }
+            if (logicalRange) chart.timeScale().setVisibleLogicalRange({ from: logicalRange.from + 20, to: logicalRange.to + 20 });
         });
+        document.getElementById('btn-reset').addEventListener('click', () => chart.timeScale().scrollToRealTime());
 
-        document.getElementById('btn-reset').addEventListener('click', () => {
-            chart.timeScale().scrollToRealTime(); 
-        });
-
+        // --- CÁLCULOS TÉCNICOS ---
         function calculateBB(data, period = 20, stdDev = 2) {
             let result = [];
             for (let i = 0; i < data.length; i++) {
@@ -319,189 +176,151 @@
             return result;
         }
 
-        // --- ATUALIZAÇÃO DO TERMÔMETRO ---
-        function updateMarketStatus(currentPrice, bbUpper, bbLower, bbBasis) {
+        function calculateEMA(data, period = 200) {
+            let result = [];
+            let k = 2 / (period + 1);
+            let ema = data[0].close; // seed inicial simples
+            for (let i = 0; i < data.length; i++) {
+                if (i < period) { 
+                    // Simplesmente avança até ter dados suficientes
+                    ema = data[i].close; 
+                    result.push({ time: data[i].time }); 
+                    continue; 
+                }
+                ema = data[i].close * k + ema * (1 - k);
+                result.push({ time: data[i].time, value: ema });
+            }
+            return result;
+        }
+
+        // --- TERMÔMETRO INTELIGENTE ---
+        function updateMarketStatus(currentPrice, bbUpper, bbLower, bbBasis, emaTrendVal) {
             const range = bbUpper - bbLower;
-            const distanceToUpper = bbUpper - currentPrice;
-            const distanceToLower = currentPrice - bbLower;
-            const fillElement = document.getElementById('status-bar-fill');
-            const textElement = document.getElementById('status-bar-text');
+            const fill = document.getElementById('status-bar-fill');
+            const txt = document.getElementById('status-bar-text');
 
             if (range === 0) return;
 
-            // 1. Calcula Posição
             let position = (currentPrice - bbLower) / range;
             position = Math.max(0, Math.min(1, position));
 
-            let statusText = "MERCADO NEUTRO";
-            let color = "#2ea043"; // Verde (Neutro)
-            let width = position * 100;
+            let statusText = "NEUTRO";
+            let color = "#d29922"; 
+            
+            // Lógica combinada com EMA 200
+            const trend = currentPrice > emaTrendVal ? "ALTA (COMPRAS)" : "BAIXA (VENDAS)";
+            const distUp = bbUpper - currentPrice;
+            const distDown = currentPrice - bbLower;
 
-            const isNearUpper = distanceToUpper / range < 0.2; 
-            const isNearLower = distanceToLower / range < 0.2; 
-
-            if (isNearUpper) {
-                statusText = `🔴 ALERTA VENDA: Perto da Banda Superior`;
-                color = "#da3633"; 
-            } else if (isNearLower) {
-                statusText = `🟢 ALERTA COMPRA: Perto da Banda Inferior`;
-                color = "#238636"; 
+            if (distUp / range < 0.2) {
+                // Perto do topo
+                statusText = `🔴 VENDA (${trend})`;
+                color = "#da3633";
+            } else if (distDown / range < 0.2) {
+                // Perto do fundo
+                statusText = `🟢 COMPRA (${trend})`;
+                color = "#238636";
             } else {
-                 statusText = `🟡 NEUTRO: ${Math.abs(currentPrice - bbBasis).toFixed(0)} USD p/ Média`;
-                color = "#d29922"; 
+                statusText = `🟡 NEUTRO - Tendência: ${trend}`;
             }
 
-            fillElement.style.width = `${width}%`;
-            fillElement.style.backgroundColor = color;
-            textElement.innerText = statusText;
+            fill.style.width = `${position * 100}%`;
+            fill.style.backgroundColor = color;
+            txt.innerText = statusText;
         }
 
         async function loadChartData() {
             try {
-                // Removemos o cálculo manual de timezoneOffset para manter consistência com UTC
                 const res = await fetch('https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=2000');
                 const json = await res.json();
                 const rawData = json.Data.Data;
 
-                // Mapeia usando o tempo RAW (UTC segundos) que a API retorna
-                const candles = rawData.map(d => ({ 
-                    time: d.time, 
-                    open: d.open, high: d.high, low: d.low, close: d.close 
-                }));
-                
+                const candles = rawData.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
                 candleSeries.setData(candles);
+                
+                // BB
                 const bbData = calculateBB(candles);
                 const validBB = bbData.filter(d => d.upper);
-
                 bbUpper.setData(validBB.map(d => ({ time: d.time, value: d.upper })));
                 bbLower.setData(validBB.map(d => ({ time: d.time, value: d.lower })));
                 bbBasis.setData(validBB.map(d => ({ time: d.time, value: d.basis })));
 
-                // Atualiza termômetro
-                if (rawData.length > 20) {
-                    const lastCandle = rawData[rawData.length - 1];
+                // EMA 200
+                const emaData = calculateEMA(candles, 200);
+                const validEMA = emaData.filter(d => d.value);
+                emaTrend.setData(validEMA);
+
+                // Status
+                if (rawData.length > 200) {
+                    const lastC = rawData[rawData.length - 1];
                     const lastBB = bbData[bbData.length - 1];
-                    if (lastBB.upper && lastBB.lower && lastBB.basis) {
-                         updateMarketStatus(lastCandle.close, lastBB.upper, lastBB.lower, lastBB.basis);
+                    const lastEMA = emaData[emaData.length - 1];
+                    if (lastBB.upper && lastEMA.value) {
+                         updateMarketStatus(lastC.close, lastBB.upper, lastBB.lower, lastBB.basis, lastEMA.value);
                     }
                 }
-
             } catch (e) { console.error("Erro gráfico", e); }
         }
 
         async function loadHistory() {
             if (!db) return;
-            
             const q = query(collection(db, "historico_bitcoin"), orderBy("timestamp", "desc"), limit(50));
-            
             try {
                 const snapshot = await getDocs(q);
                 const tbody = document.getElementById('trade-table');
                 tbody.innerHTML = '';
                 
-                let wins = 0;
-                let total_fechados = 0; 
-                let total_geral = 0;    
-                
-                const newMarkers = [];
-                const now = Date.now();
+                let wins = 0; let total = 0; const newMarkers = []; const now = Date.now();
 
                 snapshot.forEach(doc => {
                     const data = doc.data();
                     if (data.action !== 'ENTRY' && data.action !== 'EXIT') return; 
 
-                    total_geral++;
                     const outcome = data.outcome ? data.outcome.toString().toUpperCase().trim() : null;
-                    
-                    if (outcome === 'WIN') { wins++; total_fechados++; } 
-                    else if (outcome === 'LOSS') { total_fechados++; }
+                    if (outcome === 'WIN' || outcome === 'LOSS') { if(outcome==='WIN') wins++; total++; }
 
                     const row = document.createElement('tr');
-                    const date = new Date(data.timestamp);
-                    const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    const timeStr = new Date(data.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
                     
                     let tipoBadge = `<span class="badge bg-gray">${data.action}</span>`;
-                    if (data.action === 'ENTRY') {
-                        tipoBadge = data.direction === 'UP' ? `<span class="badge bg-green">COMPRA</span>` : `<span class="badge bg-red">VENDA</span>`;
-                    } else { 
-                        tipoBadge = `<span class="badge bg-gray">SAÍDA</span>`; 
-                    }
+                    if (data.action === 'ENTRY') tipoBadge = data.direction === 'UP' ? `<span class="badge bg-green">COMPRA</span>` : `<span class="badge bg-red">VENDA</span>`;
+                    else tipoBadge = `<span class="badge bg-gray">SAÍDA</span>`; 
 
                     let resultado = '-';
                     const profit = data.profit_pct ? parseFloat(data.profit_pct) : 0;
-                    if (outcome === 'WIN') { resultado = `<span class="badge bg-green">+${profit.toFixed(2)}%</span>`; } 
-                    else if (outcome === 'LOSS') { resultado = `<span class="badge bg-red">${profit.toFixed(2)}%`; }
+                    if (outcome === 'WIN') resultado = `<span class="badge bg-green">+${profit.toFixed(2)}%</span>`; 
+                    else if (outcome === 'LOSS') resultado = `<span class="badge bg-red">${profit.toFixed(2)}%`;
                     
                     let validadeBadge = '-';
                     if (data.action === 'ENTRY') {
-                        const diffMinutes = (now - data.timestamp) / (1000 * 60);
-                        if (diffMinutes < 5) validadeBadge = `<span class="badge bg-green">⚡ IDEAL</span>`;
-                        else if (diffMinutes < 15) validadeBadge = `<span class="badge bg-yellow">⚠️ ATRASADO</span>`;
+                        const diff = (now - data.timestamp) / 60000;
+                        if (diff < 5) validadeBadge = `<span class="badge bg-green">⚡ IDEAL</span>`;
+                        else if (diff < 15) validadeBadge = `<span class="badge bg-yellow">⚠️ ATRASADO</span>`;
                         else validadeBadge = `<span class="badge bg-gray">❌ EXPIRADO</span>`;
-                    } else { validadeBadge = `<span class="badge bg-gray">FECHADO</span>`; }
+                    } else validadeBadge = `<span class="badge bg-gray">FECHADO</span>`;
 
-                    const entryPriceStr = data.entryPrice ? `$${data.entryPrice.toFixed(0)}` : '-';
-                    const alvoStr = (data.action === 'ENTRY' && data.takeProfit) ? `$${data.takeProfit.toFixed(0)}` : '-';
-                    const stopStr = (data.action === 'ENTRY' && data.stopLoss) ? `$${data.stopLoss.toFixed(0)}` : '-';
-
-                    if (total_geral === 1) {
-                        const elLast = document.getElementById('stat-last');
-                        if(outcome === 'WIN' || outcome === 'LOSS') {
-                            elLast.innerText = outcome;
-                            elLast.className = 'stat-val ' + (outcome === 'WIN' ? 'win' : 'loss');
-                        } else {
-                            elLast.innerText = 'AGUARDANDO';
-                            elLast.className = 'stat-val';
-                        }
-                    }
-
-                    row.innerHTML = `
-                        <td style="font-weight:bold">${timeStr}</td>
-                        <td>${tipoBadge}</td>
-                        <td>${entryPriceStr}</td>
-                        <td style="color: #2ea043">${alvoStr}</td>
-                        <td style="color: #da3633">${stopStr}</td>
-                        <td>${validadeBadge}</td>
-                        <td>${resultado}</td>
-                    `;
+                    row.innerHTML = `<td>${timeStr}</td><td>${tipoBadge}</td><td>$${data.entryPrice?.toFixed(0)||'-'}</td><td style="color:#2ea043">$${data.takeProfit?.toFixed(0)||'-'}</td><td style="color:#da3633">$${data.stopLoss?.toFixed(0)||'-'}</td><td>${validadeBadge}</td><td>${resultado}</td>`;
                     tbody.appendChild(row);
 
                     if (data.action === 'ENTRY') {
-                        // Correção: Usando timestamp UTC direto (sem subtrair timezone) para alinhar com o gráfico
-                        newMarkers.push({
-                            time: (data.timestamp / 1000), 
-                            position: data.direction === 'UP' ? 'belowBar' : 'aboveBar',
-                            color: data.direction === 'UP' ? '#2ea043' : '#da3633',
-                            shape: data.direction === 'UP' ? 'arrowUp' : 'arrowDown',
-                            text: data.direction === 'UP' ? 'B' : 'S'
-                        });
+                        newMarkers.push({ time: (data.timestamp / 1000), position: data.direction === 'UP' ? 'belowBar' : 'aboveBar', color: data.direction === 'UP' ? '#2ea043' : '#da3633', shape: data.direction === 'UP' ? 'arrowUp' : 'arrowDown', text: data.direction === 'UP' ? 'B' : 'S' });
                     }
                 });
-
                 candleSeries.setMarkers(newMarkers);
-                document.getElementById('stat-total').innerText = total_fechados;
-
-                if (total_fechados > 0) {
-                    const winRate = (wins / total_fechados) * 100;
+                document.getElementById('stat-total').innerText = total;
+                if (total > 0) {
+                    const wr = (wins / total) * 100;
                     const elWin = document.getElementById('stat-winrate');
-                    elWin.innerText = winRate.toFixed(0) + '%';
-                    elWin.className = 'stat-val ' + (winRate >= 50 ? 'win' : 'loss');
-                } else { 
-                    document.getElementById('stat-winrate').innerText = '--%'; 
-                    document.getElementById('stat-winrate').className = 'stat-val';
+                    elWin.innerText = wr.toFixed(0) + '%';
+                    elWin.className = 'stat-val ' + (wr >= 50 ? 'win' : 'loss');
                 }
-
-            } catch (e) { console.error("Erro ao carregar histórico:", e); }
+            } catch (e) { console.error("Erro histórico", e); }
         }
 
         async function start() { await loadChartData(); await loadHistory(); }
         start();
         setInterval(start, 60000); 
-        new ResizeObserver(entries => { 
-            if (entries.length === 0) return; 
-            const newRect = entries[0].contentRect; 
-            chart.applyOptions({ height: newRect.height, width: newRect.width }); 
-        }).observe(document.getElementById('chart-container'));
+        new ResizeObserver(e => { if(e.length) chart.applyOptions({ width: e[0].contentRect.width, height: e[0].contentRect.height }); }).observe(document.getElementById('chart-container'));
     </script>
 </body>
 </html>
